@@ -48,7 +48,7 @@ int hex_glove_start(HexGloveHandle handle, const char* port_name);
 
 ### 读取接收器 ID：`hex_glove_get_device_id`
 
-**接口描述**：获取 SDK 在当前串口连接中解析的六位 ASCII 接收器 ID。示例回复 `31 31 34 32 30 35` 对应 `114205`。这是一个接收器 ID，不是左右手各自的序列号。
+**接口描述**：获取 SDK 在当前串口连接中解析的六位 ASCII 接收器 ID。示例回复对应 `114205`。这是一个接收器 ID，不是左右手各自的序列号。
 
 ```c
 int hex_glove_get_device_id(HexGloveHandle handle, char* output, uint32_t capacity);
