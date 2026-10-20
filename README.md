@@ -10,7 +10,8 @@ Hexacercle 数据手套 SDK，提供设备接入接口、预编译动态库、�
 
 - **C++ SDK**：[GitHub Release](https://github.com/zqr1227/fulai_tactile_sdk/releases/tag/v1.0.1)
 - **Python SDK**：[fulai-tactile（PyPI）](https://pypi.org/project/fulai-tactile/)
-请配合该仓库位姿SDK使用。
+
+可配合该仓库SDK使用。
 
 ## 功能
 
