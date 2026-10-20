@@ -4,6 +4,13 @@ SDK, API documentation, and C++/Python examples for Hexacercle motion capture gl
 
 Hexacercle 数据手套 SDK，提供设备接入接口、预编译动态库、中文开发文档及 C++ / Python 示例，帮助开发者读取双手骨骼与关节角数据，并接入自己的应用。
 
+## 相关 SDK
+
+触觉手套 SDK 提供以下开发版本：
+
+- **C++ SDK**：[GitHub Release](https://github.com/zqr1227/fulai_tactile_sdk/releases/tag/v1.0.1)
+- **Python SDK**：[fulai-tactile（PyPI）](https://pypi.org/project/fulai-tactile/)
+
 ## 功能
 
 - 接收器连接、设备信息查询及连接状态诊断。
