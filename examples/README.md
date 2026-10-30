@@ -1,5 +1,7 @@
 # 全部示例编译与测试说明（Linux / Windows）
 
+> **10.27 说明**：以下 2026-10-16 Ubuntu 实机结果属于 10.16 历史测试。本目录已替换 10.27 库；三个 C++ 命令行示例已通过 Windows C++17 编译链接，但本次尚未对 10.27 库重新做真实手套、Qt 或 MuJoCo 实机验收。接口变化见[版本说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。
+
 本文提供本 SDK 全部 7 个可运行示例的编译、运行、自检及退出指令。所有命令均从 **SDK 根目录**执行，不是从 `examples` 目录执行。
 
 ## 1. 示例和验证范围
@@ -171,24 +173,6 @@ python3 examples/mujoco_sdk_skeleton/main.py \
 
 默认自动加载源码旁边的 `10030.hexprofile` 和 `xgf_skeleton.json`，与工作目录无关。改用其他档案时加 `--profile "$SDK_PROFILE"`；`--hand left/right/both` 可选择显示的手。关闭窗口或按 Ctrl+C 退出。
 
-### 3.9 Qt 6.5.3
-
-```bash
-cmake -S examples/qt_skeleton_viewer -B build-qt65 \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH="$SDK_QT" \
-  -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
-
-cmake --build build-qt65 -j2
-
-./build-qt65/qt_skeleton_viewer "$SDK_PORT" \
-  --profile "$SDK_PROFILE"
-```
-
-禁用 Qt5 回退可避免 Qt6 未找到时误用 Qt5；已经找到 Qt6 时，CMake 可能提示该回退变量未使用，不影响构建。改变 Qt 版本、编译器或操作系统时使用新的构建目录。
-
-Qt 顶部显示设备 ID、双手数据状态和观测帧率。完成基准校准后伸直手指，点击“角度归零”查看角度；需要导出时在启动命令末尾加 `--csv test-results/qt-angles.csv --jsonl test-results/qt-angles.jsonl`。关闭窗口释放串口。
-
 ## 4. Windows 编译与测试（PowerShell）
 
 ### 4.1 开发环境与公共准备
@@ -333,31 +317,6 @@ python .\examples\mujoco_sdk_skeleton\main.py `
 
 默认自动读取脚本旁边的档案和骨架配置；关闭窗口或按 Ctrl+C 退出。
 
-### 4.9 Qt 6.5.3
-
-使用独立的 Windows 构建目录，不要复用 Linux 的 CMake 缓存。
-
-```powershell
-cmake -S .\examples\qt_skeleton_viewer -B .\build-qt65-win `
-    -G "MinGW Makefiles" `
-    -DCMAKE_BUILD_TYPE=Release `
-    "-DCMAKE_PREFIX_PATH=$SdkQt" `
-    -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
-if ($LASTEXITCODE -ne 0) { throw "Qt 配置失败" }
-
-cmake --build .\build-qt65-win -j2
-if ($LASTEXITCODE -ne 0) { throw "Qt 编译失败" }
-
-.\build-qt65-win\qt_skeleton_viewer.exe $SdkPort `
-    --profile "$SdkProfile"
-```
-
-构建脚本会复制 SDK DLL 及配套 MinGW 运行库到程序目录。从当前已设置 PATH 的终端可查找 Qt 库；若需要在文件管理器中直接启动，可用该 Qt 套件的部署工具补齐 Qt DLL 与平台插件：
-
-```powershell
-& "$SdkQt\bin\windeployqt.exe" --release .\build-qt65-win\qt_skeleton_viewer.exe
-```
-
 部署后仍需保留配套 SDK DLL，且实际设备驱动、运行时兼容性及完整功能应在目标 Windows 机器验证。
 
 ## 5. 参数、输出与结果判断
@@ -386,7 +345,6 @@ if ($LASTEXITCODE -ne 0) { throw "Qt 编译失败" }
 - 工作流 `phase=4`、`streaming=3` 表示双手数据流；`profile=1` 表示已加载档案。
 - CSV/JSON 应有左右手记录、时间戳、帧号和 15 个角度字段，单位为度。已有文件可能被同名运行覆盖。
 - MuJoCo 日志应出现 `online_mask=3`、`left:tracked right:tracked`；灰色模型不能作为实时跟踪证据。
-- Qt 未归零前不输出新角度；骨骼正常不代表角度零位已完成。
 - 界面显示的观测帧率、双手到达间隔不等于硬件采样率、端到端延迟或硬件同步证明。
 
 ### 5.3 常见问题
@@ -397,18 +355,8 @@ if ($LASTEXITCODE -ne 0) { throw "Qt 编译失败" }
 | Linux 找不到 `.so` | 使用上述配套目录；Python 传绝对 `--lib` 路径，C++ 保留 rpath 或配置 `LD_LIBRARY_PATH` |
 | Windows 找不到 DLL / 错误 126 | 确认主 DLL 和依赖齐全，SDK 目录在搜索路径，Python 和 DLL 均为 64 位 |
 | Windows 架构错误 / 错误 193 | 检查 Python、MinGW、Qt、SDK 是否同为 x64 |
-| Qt 找不到平台插件 | 使用对应 Qt 套件运行环境，或执行 `windeployqt`；不要混用 Qt5/Qt6 插件 |
-| Qt 实际使用了旧版本 | 检查 CMake 的 `Qt6_DIR` 与运行库路径；切换版本时新建构建目录 |
 | MuJoCo 无法创建图形窗口 | 先执行 `--check-gl`；Linux 在本地图形终端检查显示会话和 OpenGL 环境 |
 | 工作流 `profile=0` | 按实际选中的串口路径生成档案键，不要把 COM 端口或 Linux 别名当成同一个键 |
 | 没有角度导出 | 检查是否有新鲜且完整的跟踪帧、R 是否就绪、角度零位是否建立 |
 
-## 6. 示例实现要点
-
-- 打开串口后 SDK 会请求六位接收器 ID。命令行示例先等待 ID 回复，必要时补发读 ID 指令，再请求信道；未收到 ID 时仍继续基本数据查询。`hex_glove_get_device_id` 返回 0 表示尚无回复，不能把端口名或左右手两字符 `device_code` 当作接收器 ID。
-- 统一快照示例每轮调用一次 `hex_external_update`，随后用 `hex_external_get_frame` 读取同轮双手骨骼和关节角；仅处理 `fresh_hand_mask` 标记的新帧。Qt 使用 `hex_partner_tick` 推进连接、重连和数据，再读取状态、事件及姿态。不要在同一轮更新中额外调用 `hex_mocap_update`。
-- 导出的 15 项角度来自 Angle Hub，包含 `thumb_cmc`，单位为度。`finger[5][4]` 精确角数组没有单独的拇指 CMC 项，不应把两套角度拼成同一组字段。CSV/JSON Lines 包含 SDK 毫秒时间戳、宿主 UTC 毫秒时间戳、帧号和手别；仅在跟踪与角度零位就绪后输出新数据。
-- Qt 骨骼画布按 SDK 约定 `hand=0` 显示左手、`hand=1` 显示右手。F5 或 F6 切换双手腕部 X/Y 同步；界面帧率是宿主观测到的新帧频率，不代表硬件标称采样率。画布使用 21 节点投影，不包含手腕绝对平移或 FBX 网格。
-- 未传 `--profile` 的快速入门示例使用 SDK 合成骨架，仅供链路和画线验证。正式应用应加载与实际模型、设备和佩戴状态匹配的校准档案。普通 R 与关节角伸直零位是不同步骤；重新 R 后应重新建立角度零位。
-
-详细接口契约和生命周期见[对外 API 说明](../接口文档/EXTERNAL_API.zh-CN.md)与[基础接入指南](../接口文档/EXTERNAL_INTEGRATION.zh-CN.md)；MuJoCo 专项说明见[MuJoCo README](mujoco_sdk_skeleton/README.zh-CN.md)。
+详细 API 与生命周期见 [接口文档](../接口文档/README.zh-CN.md)，示例原理见 [SDK 使用说明](SDK_USAGE_PYTHON_CPP_QT.zh-CN.md)，MuJoCo 详细说明见 [MuJoCo README](mujoco_sdk_skeleton/README.zh-CN.md)。
