@@ -1,8 +1,10 @@
 # HexaCercle 手套 SDK｜API 概览
 
+**10.27 版本说明**：本目录对外精简头文件的函数名称与签名保持 10.16 范围；当前库内部新增 27 项导出，但未纳入本次对外承诺。既有连接、骨骼、角度接口可继续按本页接入；新库的滤波、快速 R、腕部姿态与档案行为差异见[10.16 → 10.27 接口变更说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。
+
 > **接口类型**：本地 C ABI（Windows DLL／Linux SO）  
 > **适用对象**：C++17、Qt 6.5+、Python `ctypes` 接入方  
-> **文档版本**：2026-10-15；函数声明以随包 `library/include/hex_glove/` 为准
+> **文档版本**：2026-10-27；函数声明以随包 `library/include/hex_glove/` 为准
 
 [文档入口](README.zh-CN.md) · [接入指南](EXTERNAL_INTEGRATION.zh-CN.md) · [函数参数](EXTERNAL_API_PARAMETERS.zh-CN.md) · [工作流接口](PARTNER_INTEGRATION.zh-CN.md) · [交付状态](WINDOWS_CPP_SDK_DELIVERY_STATUS.zh-CN.md)
 
@@ -197,7 +199,7 @@ R 状态：`0` 空闲、`1` 采样、`2` 完成、`3` 失败、`4` 取消。`pro
 - 实时 `timestamp_ms` 是宿主单调时间，不是 Unix UTC 时间。
 - 仅消费 `tracked_mask` 对应的实时骨骼；模型有效位与跟踪有效位含义不同。
 
-> 版本提示：Windows 库已同步至当前源码构建；随包 Linux 库已于 2026-10-15 从当前源码重新构建。外部接口以本文件和精简头文件为准，但 Linux 运行行为须在目标环境验证。
+> 版本提示：Windows 库已同步至当前源码构建；随包 Linux 库已于 2026-10-27 从当前源码构建。外部接口以本文件和精简头文件为准，但 Linux 运行行为须在目标环境验证。
 
 
 

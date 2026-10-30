@@ -8,9 +8,9 @@
 | `windows-x64/HexaCercleGlove.dll` | 当前源码构建的 Windows x64 主动态库。 |
 | `windows-x64/libHexaCercleGlove.dll.a` | 配套 MinGW/GCC 链接库；MSVC 不能直接使用。 |
 | `windows-x64/libgcc_s_seh-1.dll`、`libstdc++-6.dll`、`libwinpthread-1.dll` | Windows 运行所需的 MinGW 依赖。 |
-| `linux-x64/libHexaCercleGlove.so` | 2026-10-15 从当前源码重新构建的 Linux x64 动态库；外部支持范围仍以本目录 API 文档为准。 |
+| `linux-x64/libHexaCercleGlove.so` | 2026-10-27 从当前源码构建的 Linux x64 动态库；外部支持范围仍以本目录 API 文档为准。 |
 
-动态库自身仍可能导出未列在精简头文件中的内部函数；精简头文件和外部文档定义当前对外支持范围，并不限制二进制导出。Windows 示例需使用本目录头文件和配套链接库编译链接；本轮验证结果以根目录 README 为准。生产发布前应在目标 Linux 环境验证 `.so` 的运行兼容性和真实手套通信。
+动态库自身仍可能导出未列在精简头文件中的内部函数；精简头文件和外部文档定义当前对外支持范围，并不限制二进制导出。Windows 示例需使用本目录头文件和配套链接库编译链接；动态导出已核对；真实设备验收范围以根目录 README 为准。生产发布前应在目标 Linux 环境验证 `.so` 的运行兼容性和真实手套通信。
 
 
 

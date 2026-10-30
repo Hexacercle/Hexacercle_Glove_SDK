@@ -1,9 +1,11 @@
 # 对外 SDK 函数参数手册
 
+**10.27 参数核对**：对外函数名与 C 签名沿用 10.16，以下参数表继续适用；运行效果及档案版本差异见[10.16 → 10.27 接口变更说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。新内部接口不在本手册的开放范围。
+
 本手册与 [对外 API 说明](EXTERNAL_API.zh-CN.md) 配套，按交付头文件列出接入所需函数的**完整 C 签名、每个参数、返回值与调用条件**。具体结构体字段和 21 节点顺序以随包 `library/include/hex_glove/` 中的头文件为准。库中还有内部函数，本手册只覆盖对外接入接口。
 
 > **阅读顺序**：[文档入口](README.zh-CN.md) → [接入指南](EXTERNAL_INTEGRATION.zh-CN.md) → 本页参数与返回值。  
-> **适用版本**：2026-10-15 配套 Windows x64／Linux x64 库；调用前应按 `hex_mocap_get_abi_info` 核对结构布局。
+> **适用版本**：2026-10-27 配套 Windows x64／Linux x64 库；调用前应按 `hex_mocap_get_abi_info` 核对结构布局。
 
 ## 本页目录
 

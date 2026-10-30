@@ -1,5 +1,7 @@
 # HexaCercle 手套 SDK｜接入与调用指南
 
+**10.27 接入注意**：本包已替换为 10.27 Windows/Linux 库。对外函数调用顺序不变；加载旧档案和快速 R 后应重新核对手势、腕部姿态和角度零位。10.16 的实测结果不自动代表本版通过硬件验收。详见[10.16 → 10.27 接口变更说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。
+
 这份指南给首次接入的开发者使用，按“连接 → 加载校准 → 查询设备 → R → 读取双手 21 节点及关节角 → 导出数据 → 断开”的顺序说明。对外开放的函数与字段见 [API 说明](EXTERNAL_API.zh-CN.md)。
 
 > **适用范围**：Windows x64／Linux x64；C++17、Qt 6.5+ 或 Python `ctypes`  
@@ -231,10 +233,10 @@ timestamp_ms,utc_timestamp_ms,frame_sequence,hand,thumb_cmc,thumb_mcp,thumb_ip,i
 
 ## 可运行示例
 
-- [Python / C++ / Qt 示例及构建命令](../examples/README.md)：适合先检查连接、数据读取和线框显示；其中未加载校准文件的示例使用合成骨架。
+- [Python / C++ / Qt 示例及构建命令](../examples/SDK_USAGE_PYTHON_CPP_QT.zh-CN.md)：适合先检查连接、数据读取和线框显示；其中未加载校准文件的示例使用合成骨架。
 
 
-> 库版本：Windows 示例使用 当前源码构建；随包 Linux `.so` 已按 2026-10-15 从当前源码重新构建，需在目标 Linux 环境验证。
+> 库版本：Windows 示例使用 当前源码构建；随包 Linux `.so` 已按 2026-10-27 从当前源码构建，需在目标 Linux 环境验证。
 
 
 
