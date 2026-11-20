@@ -22,9 +22,9 @@
 - `external_snapshot/main.cpp`
 - `external_snapshot/main.py`
 
-SDK 在打开串口时已发出读 ID 指令 `A0 FF FF 28 01 05 FF 0A`。三个示例现先轮询 `hex_glove_get_device_id`；若 0.5 秒、3 秒仍无 ID，则调用 `hex_glove_request_device_id` 补发。收到 ID 后才请求信道；若 2 秒内始终没有 ID，仍请求信道，避免基本信息查询被无限期阻塞。收到 ID 后打印 `receiver_device_id=六位数字`。原先“紧接着发送信道查询”可能影响接收器应答，但具体原因需要串口报文或目标硬件复测确认。
+SDK 打开串口后自动查询接收器 ID。三个示例通过 `hex_glove_get_device_id` 轮询查询结果，必要时调用 `hex_glove_request_device_id` 重试。示例在收到 ID 或等待超时后继续查询信道，收到有效 ID 后会输出六位 `receiver_device_id`。查询顺序调整后的效果仍需在目标设备上复测。
 
-硬件复测时，请在对应目标机分别运行这三个示例，确认日志出现六位 `receiver_device_id`，并同时确认信道、骨骼和角度仍正常。若仍显示 `waiting`，需保留串口原始收发日志，检查读 ID 回复是否到达 SDK。
+硬件复测时，请在目标机上分别运行三个示例，确认日志出现六位 `receiver_device_id`，并核对信道、骨骼和角度。若仍显示 `waiting`，请记录所用串口、连接状态和 SDK 日志。
 
 ## 自动搜索与校准档案绑定
 
