@@ -112,8 +112,8 @@ HEX_GLOVE_API HexPartnerHandle hex_partner_create_wired(HexGloveHandle glove, He
 HEX_GLOVE_API void hex_partner_destroy(HexPartnerHandle handle);
 HEX_GLOVE_API int hex_partner_connect(HexPartnerHandle handle, int64_t monotonic_ms);
 HEX_GLOVE_API int hex_partner_disconnect(HexPartnerHandle handle);
-/* Writes start(0)/stop(1) to an open receiver. Success confirms serial write,
- * not a device acknowledgement; observe STREAMING/PAUSED and fresh mask. */
+/* Requests streaming when start=1 and pauses when start=0.
+ * After a successful write, inspect STREAMING/PAUSED and the fresh mask. */
 HEX_GLOVE_API int hex_partner_stream_control(HexPartnerHandle handle, int start);
 HEX_GLOVE_API int hex_partner_tick(HexPartnerHandle handle, int64_t monotonic_ms);
 HEX_GLOVE_API int hex_partner_get_status(HexPartnerHandle handle, HexPartnerStatus* output);

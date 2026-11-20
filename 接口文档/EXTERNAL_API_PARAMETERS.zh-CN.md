@@ -220,7 +220,7 @@ int hex_mocap_start_r_capture(HexMocapHandle handle, int hand_mask, float second
 
 `HexGloveDeviceSnapshot` 的 `batt_left/right` 是电量估算；离线时不要显示为实时电量。`route_received=0` 时 `route` 未确认。`HexGloveHardwareInfo.software_major/minor` 为固件版本，`hardware_major/minor` 为硬件版本；`device_code` 为短编码，非唯一设备 ID。`hex_glove_shutdown` 是设备关机命令，普通断开用 `hex_glove_abort`。
 
-接收器 ID 是另一条独立回复：命令 `A0 FF FF 28 01 05 FF 0A`，示例回复中的 `31 31 34 32 30 35` 为 ASCII `114205`。SDK 核验异或校验和六位数字后才让 `hex_glove_get_device_id` 返回成功。它标识当前接收器，不标识左/右手套；现有 profile 自动绑定仍使用端口和左右槽位。
+无线接收器 ID 由 SDK 单独查询。收到有效的六位 ID 后，`hex_glove_get_device_id` 返回 `1`。校准档案仍按串口和左右手槽位匹配。
 
 ## 5. 21 节点、R 与精确角度：`hex_mocap_api.h`
 
