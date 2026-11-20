@@ -102,6 +102,13 @@ HEX_GLOVE_API int hex_partner_config_init(HexPartnerConfig* config);
 HEX_GLOVE_API HexPartnerHandle hex_partner_create(HexGloveHandle glove, HexMocapHandle mocap,
                                                    HexExternalHandle external,
                                                    const HexPartnerConfig* config);
+/* Explicitly connect one wired serial port per hand. Auto detection and
+ * preferred_port_utf8 are ignored. Opening the two ports succeeds as a pair,
+ * while either hand can stop sending data without closing the open ports.
+ * The ports are copied and are always associated with their explicit slots. */
+HEX_GLOVE_API HexPartnerHandle hex_partner_create_wired(HexGloveHandle glove, HexMocapHandle mocap,
+    HexExternalHandle external, const HexPartnerConfig* config,
+    const char* left_port, const char* right_port);
 HEX_GLOVE_API void hex_partner_destroy(HexPartnerHandle handle);
 HEX_GLOVE_API int hex_partner_connect(HexPartnerHandle handle, int64_t monotonic_ms);
 HEX_GLOVE_API int hex_partner_disconnect(HexPartnerHandle handle);
@@ -128,9 +135,9 @@ HEX_GLOVE_API int hex_partner_calibration_retry(HexPartnerHandle handle);
 HEX_GLOVE_API int hex_partner_get_calibration(HexPartnerHandle handle,
                                                HexPartnerCalibrationStatus* output);
 
-/* One .hexprofile stores both hands. File association uses receiver port plus
- * left/right slots; neither this key nor device_code is a physical unique ID.
- * Save/load use the configured directory and current selected port. */
+/* One .hexprofile stores both hands. File association uses a receiver port for
+ * wireless and the ordered left/right serial port pair for wired. These keys
+ * and device_code are not physical unique IDs. Save/load use profile_dir_utf8. */
 HEX_GLOVE_API int hex_partner_profile_save(HexPartnerHandle handle);
 HEX_GLOVE_API int hex_partner_profile_load(HexPartnerHandle handle);
 HEX_GLOVE_API int hex_partner_profile_path(HexPartnerHandle handle, char* output,

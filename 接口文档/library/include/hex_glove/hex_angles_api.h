@@ -10,7 +10,7 @@ typedef struct HexAnglesConfig HexAnglesConfig;
 typedef struct HexAnglesSnapshot {
     uint32_t struct_size, version, valid_mask, calibrated;
     int64_t timestamp_ms;
-    uint32_t frame_sequence, flags; /* 1 wrist frozen, 2 realigning baseline */
+    uint32_t frame_sequence, flags; /* 1 wrist frozen; bit 2 reserved (legacy realignment) */
     float finger[5][4]; /* actual cached values used by Unity hardware/UDP */
     float ui_finger[5][4]; /* four-finger negative floor; thumb PIP/DIP >=0 */
     HexMocapVec3 palm_twist_degrees;

@@ -31,7 +31,7 @@ typedef struct HexMocapSkeletonDefinition {
  */
 typedef struct HexMocapHandShape {
     uint32_t struct_size;
-    uint32_t version;
+    uint32_t version; /* 1: whole thumb chain; 2: thumb phalanges only, keep metacarpal fixed. */
     float finger_length_scale[5];
     float palm_length_scale;
     float palm_width_scale;
@@ -42,6 +42,22 @@ typedef struct HexMocapHandShape {
     float finger_vs_middle[5];
     int32_t use_calibrated_lengths;
 } HexMocapHandShape;
+
+/** Independent personal geometry, metres. Finger order thumb,index,middle,ring,little.
+ * segment_length_m[f*3+k]: thumb CMC-MCP, MCP-IP, IP-tip; others MCP-PIP, PIP-DIP, DIP-tip.
+ * root_position_m: thumb CMC / other MCP positions in palm slot 0 orientation axes,
+ * physical metres (not scaled Transform offsets). Authored joint axes are retained.
+ * enabled=0 explicitly removes the overlay; get still returns effective dimensions.
+ * Requires a rig with uniform root and per-bone scales; nonuniform rigs are rejected
+ * rather than allowing bone lengths to change during rotation. Stored in profile v27.
+ */
+typedef struct HexMocapPersonalGeometry {
+    uint32_t struct_size;
+    uint32_t version;
+    int32_t enabled;
+    float segment_length_m[15];
+    HexMocapVec3 root_position_m[5];
+} HexMocapPersonalGeometry;
 
 /** Complete engine-free FK. valid_mask marks defined bones, tracked_mask marks
  * live solved bones (zero for rest preview / dropped input). Return success

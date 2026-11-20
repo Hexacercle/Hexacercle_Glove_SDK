@@ -31,6 +31,16 @@ HEX_GLOVE_API HexGloveHandle hex_glove_create(void);
 HEX_GLOVE_API void hex_glove_destroy(HexGloveHandle handle);
 
 HEX_GLOVE_API int hex_glove_start(HexGloveHandle handle, const char* port_name);
+/** Open two distinct wired serial endpoints as one session. Packets must match
+ * the hand selected for each port. If either port fails to open/start, both
+ * ports are closed. A physical port failure requires reopening the pair. */
+HEX_GLOVE_API int hex_glove_start_wired(HexGloveHandle handle, const char* left_port, const char* right_port);
+/** Live wired transport bits: left=1, right=2. Returns zero in receiver mode. */
+HEX_GLOVE_API uint32_t hex_glove_get_wired_open_mask(HexGloveHandle handle);
+/** Same error stages as hex_glove_get_last_open_error. hand: 0=left, 1=right,
+ * -1=no individual endpoint failure (e.g. the pair names are identical). */
+HEX_GLOVE_API int hex_glove_get_last_wired_open_error(HexGloveHandle handle, int* hand,
+                                                    uint32_t* stage, uint32_t* platform_code);
 /* Last start failure on this handle. stage: 0=none, 1=invalid port,
  * 2=OS open, 3=serial configuration, 4=start command write.
  * platform_code is GetLastError on Windows or errno on Linux; 0 if unavailable. */
@@ -39,6 +49,7 @@ HEX_GLOVE_API int hex_glove_get_last_open_error(HexGloveHandle handle,
 HEX_GLOVE_API void hex_glove_shutdown(HexGloveHandle handle);
 HEX_GLOVE_API void hex_glove_abort(HexGloveHandle handle);
 
+/** Route is receiver-only. No single route is reported for a wired pair. */
 HEX_GLOVE_API void hex_glove_send_get_route(HexGloveHandle handle);
 HEX_GLOVE_API int hex_glove_is_route_received(HexGloveHandle handle);
 HEX_GLOVE_API int hex_glove_get_route(HexGloveHandle handle);
@@ -81,6 +92,8 @@ HEX_GLOVE_API int hex_glove_get_device_snapshot(HexGloveHandle handle, HexGloveD
 HEX_GLOVE_API uint8_t hex_glove_get_frame_seq_left(HexGloveHandle handle);
 HEX_GLOVE_API uint8_t hex_glove_get_frame_seq_right(HexGloveHandle handle);
 
+/** The receiver-paired queue is unavailable for two independent wired endpoints.
+ * Use per-hand timestamps from hex_glove_get_raw_hand_frame for wired input. */
 HEX_GLOVE_API int hex_glove_try_dequeue_synced(HexGloveHandle handle, HexSyncedGloveFrame* out_frame);
 HEX_GLOVE_API HexSyncedGloveStats hex_glove_get_synced_stats(HexGloveHandle handle);
 

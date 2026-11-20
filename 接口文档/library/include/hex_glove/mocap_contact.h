@@ -108,7 +108,12 @@ enum HexMocapContactCapturePending {
     HEX_MOCAP_CAPTURE_NEEDS_VERIFICATION = 256,
     HEX_MOCAP_CAPTURE_NEEDS_NATURAL_POSE = 512,
     HEX_MOCAP_CAPTURE_NEEDS_RETURN = 1024,
-    HEX_MOCAP_CAPTURE_TIMED_OUT = 2048
+    HEX_MOCAP_CAPTURE_TIMED_OUT = 2048,
+    HEX_MOCAP_CAPTURE_REPLAY_VALIDATING = 4096,
+    /* Original UI step 7 will retain ordinary little-finger articulation while
+     * the previously accepted index/middle/ring contacts are audited. This is
+     * not a high-precision little-finger capture; ready remains zero. */
+    HEX_MOCAP_CAPTURE_LITTLE_STANDARD = 8192
 };
 typedef struct HexMocapContactCaptureStatus {
     uint32_t struct_size, version;
@@ -116,6 +121,40 @@ typedef struct HexMocapContactCaptureStatus {
     uint32_t ready, pending_mask, total_samples, close_samples, stored_samples, rejected_samples;
     float flex_span_deg, flex_rise_deg, close_ratio, elapsed_seconds, progress;
 } HexMocapContactCaptureStatus;
+
+/* Q16/Q17 two-static-endpoint acquisition. Transition motion is not observed
+ * contact data. The middle motion is inferred by the calibrated model. */
+enum HexMocapContactEndpointPhase {
+    HEX_MOCAP_ENDPOINT_INACTIVE=0, HEX_MOCAP_ENDPOINT_PREPARING=1,
+    HEX_MOCAP_ENDPOINT_PINCH=2, HEX_MOCAP_ENDPOINT_CHANGE=3,
+    HEX_MOCAP_ENDPOINT_CLAW=4, HEX_MOCAP_ENDPOINT_READY=5,
+    HEX_MOCAP_ENDPOINT_VALIDATING=6, HEX_MOCAP_ENDPOINT_FAILED=7,
+    HEX_MOCAP_ENDPOINT_LITTLE_STANDARD=8
+};
+typedef struct HexMocapContactEndpointStatus {
+    uint32_t struct_size,version;
+    int32_t finger;
+    uint32_t phase,completed_mask,pending_mask;
+    float phase_progress,stable_seconds,required_stable_seconds,elapsed_seconds,pose_separation_deg;
+    uint32_t pinch_samples,claw_samples;
+    float residual_m;
+} HexMocapContactEndpointStatus;
+
+/* Separate, size-checked ABI; existing capture/quality structs are unchanged.
+ * stage: 0 none, 1 fit unavailable, 2 observed pose, 3 interpolation,
+ * 4 moving replay. Error maxima cover the COMPLETE selected candidate.
+ * row/fraction locate the worst error; repair bounds cover every failed
+ * observation/edge on that finger, not just the first threshold crossing. */
+typedef struct HexMocapContactReplayDiagnostic {
+    uint32_t struct_size, version, stage;
+    int32_t finger;
+    uint32_t row, direction, tested, failed;
+    float fraction, tolerance_m, worst_m, observed_m, interpolated_m, moving_m;
+    uint32_t repair_begin, repair_end, path_samples, supplement_available;
+    uint32_t supplement_active, retained_samples, added_samples;
+    float supplement_progress, hold_seconds;
+    float over_target_ratio, longest_excursion_seconds, peak_limit_m;
+} HexMocapContactReplayDiagnostic;
 
 /* Diagnostic ABI: 1 strict verification; 2 simple closure; 3 limited motion;
  * 4 source Unity complete-pose replay (profile v12).

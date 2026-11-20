@@ -21,6 +21,17 @@ HEX_GLOVE_API int hex_mocap_start_r_capture(HexMocapHandle handle, int hand_mask
 HEX_GLOVE_API int hex_mocap_get_r_capture_info(HexMocapHandle handle, HexMocapRCaptureInfo* info);
 /* Seven-step calibration and per-hand contact capture used by the Qt integration sample. */
 HEX_GLOVE_API int hex_mocap_seven_step_begin_original_ui(HexMocapHandle handle, int hand_mask);
+/* Windows 11.20: Q17 captures a stable pad pinch and tip pinch for each finger
+ * on a canonical 11-channel mapping. Query each selected hand after update. */
+HEX_GLOVE_API int hex_mocap_seven_step_begin_endpoints(HexMocapHandle handle, int hand_mask);
+HEX_GLOVE_API int hex_mocap_get_contact_endpoint_status(HexMocapHandle handle, int hand, HexMocapContactEndpointStatus* status);
+/* Retry retains captured endpoints. Recapture discards both endpoints of the
+ * selected finger and is available only on a paused Q17 contact step. */
+HEX_GLOVE_API int hex_mocap_contact_recapture(HexMocapHandle handle, int hand_mask);
+/* Native playback default is enabled. The Qt sample sets its session to off
+ * at startup. Applies to both hands and survives profile loading. */
+HEX_GLOVE_API int hex_mocap_set_opposition_assist_enabled(HexMocapHandle handle, int enabled);
+HEX_GLOVE_API int hex_mocap_get_opposition_assist_enabled(HexMocapHandle handle, int* enabled);
 HEX_GLOVE_API int hex_mocap_seven_step_cancel(HexMocapHandle handle);
 HEX_GLOVE_API int hex_mocap_seven_step_get_state(HexMocapHandle handle, HexMocapSevenStepState* state);
 HEX_GLOVE_API int hex_mocap_get_contact_capture_status(HexMocapHandle handle, int hand, HexMocapContactCaptureStatus* status);
