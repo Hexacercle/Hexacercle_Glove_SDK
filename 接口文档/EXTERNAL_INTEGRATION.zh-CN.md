@@ -1,7 +1,5 @@
 # HexaCercle 手套 SDK｜接入与调用指南
 
-**10.27 接入注意**：本包已替换为 10.27 Windows/Linux 库。对外函数调用顺序不变；加载旧档案和快速 R 后应重新核对手势、腕部姿态和角度零位。10.16 的实测结果不自动代表本版通过硬件验收。详见[10.16 → 10.27 接口变更说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。
-
 这份指南给首次接入的开发者使用，按“连接 → 加载校准 → 查询设备 → R → 读取双手 21 节点及关节角 → 导出数据 → 断开”的顺序说明。对外开放的函数与字段见 [API 说明](EXTERNAL_API.zh-CN.md)。
 
 > **适用范围**：Windows x64／Linux x64；C++17、Qt 6.5+ 或 Python `ctypes`  
@@ -21,15 +19,40 @@
 
 需要 SDK 自动搜索/重连、连接状态事件和校准文件自动加载时，使用[上位机对接指南](PARTNER_INTEGRATION.zh-CN.md)的 `hex_partner_*` 流程；本页以下基础流程仍适用于已知串口且由应用自行管理连接的情况。
 
+Windows 双有线用户可直接采用 [工作流指南](PARTNER_INTEGRATION.zh-CN.md#双有线串口windows-x64) 的 `hex_partner_create_wired`。若应用自行管理连接，以 `hex_glove_start_wired(glove, left_port, right_port)` 打开两口，成功后调用 `hex_external_reset(external)` 清理旧快照和角度零位，再继续本页的 `hex_external_update → hex_external_get_frame`。每手按自己的新帧位、时间戳消费数据。
+
 ## 接入前准备
 
-1. 使用与当前编译产物配套的 `library/include/hex_glove/` 头文件与原生库：Windows 为 `HexaCercleGlove.dll`，Linux 为 `libHexaCercleGlove.so`。
+1. Windows 使用 `library/include` 和 `library/windows-x64`。Linux 使用 `library/linux-x64/include` 和同目录平台库 `libHexaCercleGlove.so`。
 2. 准备串口名称，如 `COM3` 或 `/dev/ttyUSB0`。确保串口没有被其他上位机占用。
-   打开串口后 SDK 自动发送读 ID 指令。用 `hex_glove_get_device_id(glove, id, sizeof(id))` 等待六位接收器 ID；回复未到时返回 `0`。完整签名见[函数参数手册](EXTERNAL_API_PARAMETERS.zh-CN.md)。
-3. 如需复现已校准的手型和姿态，准备由同版本 SDK 保存的 `.hexprofile` 文件。它包含模型与校准数据；没有该文件时只能先使用演示合成骨架验证链路。
+   无线接收器打开后 SDK 自动发送读 ID 指令。用 `hex_glove_get_device_id(glove, id, sizeof(id))` 等待六位接收器 ID；回复未到时返回 `0`。完整签名见[函数参数手册](EXTERNAL_API_PARAMETERS.zh-CN.md)。
+3. 如需复现已校准的手型和姿态，准备与目标骨架、硬件及佩戴匹配的兼容 `.hexprofile`。Windows Qt 在没有档案时可以从随包 M11 映射开始七步校准。控制台示例未传档案时使用演示骨架。
 4. 运行程序前确保系统能找到原生库及其依赖。Python、应用程序和 DLL 的架构必须一致。
 
 推荐先阅读 [统一快照 C++ 示例](../examples/external_snapshot/main.cpp) 和 [统一快照 Python 示例](../examples/external_snapshot/main.py)。它们使用同一次更新缓存的左右手骨骼及 Hub 角度，并演示状态、接收诊断、ABI、错误码、CSV 和 JSON Lines。原有快速入门示例仍展示逐个底层接口的调用方式。
+
+### External 接口头文件与 MSVC 配置
+
+`hex_external_*` 是独立的外部流程接口。下面三个函数声明在 `hex_glove/hex_external_api.h`，不在 `hex_mocap_api.h`；该头文件属于本包已有接口，11.20-MSVC 保留这三个入口。
+
+```cpp
+#include "hex_glove/hex_external_api.h"
+
+// 以下为头文件中的函数签名，供查阅；不要在应用中重复手写声明。
+HexExternalHandle hex_external_create(HexGloveHandle glove, HexMocapHandle mocap);
+int hex_external_profile_load(HexExternalHandle handle, const char* path_utf8);
+int hex_external_update(HexExternalHandle handle);
+```
+
+| 函数 | 作用与调用条件 | 返回值 |
+| --- | --- | --- |
+| `hex_external_create(glove, mocap)` | 在已创建的手套和动作捕捉句柄上创建快照会话；`mocap` 必须由同一个 `glove` 创建。会话不接管这两个句柄的所有权，退出时先销毁 `external`。 | 成功返回 `HexExternalHandle`，失败返回空指针。 |
+| `hex_external_profile_load(external, path_utf8)` | 以 UTF-8 路径加载 `.hexprofile` 模型及校准配置，推荐在开始实时求解前调用；失败时读取 `hex_external_get_last_error`。 | 成功 `1`，失败 `0`。 |
+| `hex_external_update(external)` | 推进一次 `mocap` 求解，将左右手最终姿态与关节角保存为统一缓存；随后使用 `hex_external_get_frame` 读取，并检查跟踪、新帧和角度有效位。 | 成功 `1`，失败 `0`；成功不代表双手都有新鲜有效数据。 |
+
+MSVC 项目将本包 `接口文档/library/include` 设置为头文件搜索根目录，使上面的 `hex_glove/...` 相对路径能够解析。链接 `接口文档/library/windows-x64-MSVC/HexaCercleGlove.lib`，部署同目录的 `HexaCercleGlove.dll` 和配套 VC 运行库。应用、Qt Kit 和库均应为 MSVC x64；不要只复制一个头文件或混用不同包的 `.lib` 与 DLL。本次同时提供内容相同的 `library/windows-x64/` 兼容目录，供原示例 CMake 默认路径使用。
+
+**每轮只推进一次。** `hex_external_update` 内部已调用 `hex_mocap_update`，不要在同一轮再调用后者。如果宿主已直接调用 `hex_mocap_update(mocap)`，则依次调用 `hex_external_capture(external)`、`hex_external_get_frame(external, &frame)`，不会再次推进求解。相关句柄操作应在同一线程执行；完整代码见 [external_snapshot/main.cpp](../examples/external_snapshot/main.cpp)。
 
 ## 推荐的快照调用顺序
 
@@ -236,7 +259,7 @@ timestamp_ms,utc_timestamp_ms,frame_sequence,hand,thumb_cmc,thumb_mcp,thumb_ip,i
 - [Python / C++ / Qt 示例及构建命令](../examples/SDK_USAGE_PYTHON_CPP_QT.zh-CN.md)：适合先检查连接、数据读取和线框显示；其中未加载校准文件的示例使用合成骨架。
 
 
-> 库版本：Windows 示例使用 当前源码构建；随包 Linux `.so` 已按 2026-10-27 从当前源码构建，需在目标 Linux 环境验证。
+11.20-MSVC 的 Windows x64 DLL 和导入库配套使用。Linux x64 沿用 10.16 的单接收器库，编译时使用 `library/linux-x64/include`。
 
 
 

@@ -1,7 +1,5 @@
 # HexaCercle 手套 SDK｜自动连接与标定工作流
 
-**10.27 工作流边界**：`hex_partner_*` 函数名、参数和对外状态结构未因内部 27 项新增而变化；自动档案仍按端口/左右槽位绑定，不因六位接收器 ID 自动迁移。新版档案和快速 R 行为差异见[10.16 → 10.27 接口变更说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。
-
 > **适用场景**：接入方上位机独立运行，SDK 管理搜索、重连、事件、双手标定及档案。  
 > **主入口**：`hex_partner_api.h`；所有调用在同一应用线程串行执行。
 
@@ -15,7 +13,7 @@
 4. [骨骼与旧 UDP 字段](#4-双手骨骼与既有-udp-字段)
 5. [运行环境和边界](#5-运行环境和已知边界)
 
-Qt 示例的“七步手势校准”与本页 `hex_partner_calibration_begin(FULL)` 是两个不同入口。示例按 `_XGF` Unity 工程调用 `hex_mocap_seven_step_begin_original_ui(mocap,mask)`，一个入口同步选择当前有效的左右手，使用 `hex_mocap_seven_step_get_state` 查询自动推进的七步。界面不应再把旧的手动多步流程显示为 Unity 七步校准；完成后由接入程序保存 profile。七步取消用 `hex_mocap_seven_step_cancel`，当前对指重采用 `hex_mocap_contact_retry`。
+Windows Qt 示例的“七步手势校准”调用 `hex_mocap_seven_step_begin_endpoints(mocap, mask)`。它先采集平放、伸直、握拳，再依次为食、中、无名、小指采集与拇指相对的两个静止端点（捏、掐），两姿态间可松开。Linux 示例沿用 `hex_mocap_seven_step_begin_original_ui` 的连续对指流程。两者都通过 `hex_mocap_seven_step_get_state` 查询七步状态。下文的 `hex_partner_calibration_begin(FULL)` 是另一项由宿主确认步骤的工作流。
 
 ## 串口错误与流控制补充
 
@@ -50,7 +48,19 @@ hex_glove_destroy(glove);
 
 `hex_partner_tick` 按需搜索串口、探测接收器、重试连接、推进 mocap 和外部快照。不要同时自行调用 `hex_glove_start/abort`、`hex_mocap_update` 或 `hex_external_update`。单个接收器可同时包含左、右手；`online_hand_mask` 与 `streaming_hand_mask` 的 bit 0/1 分别代表左/右。搜索的是**接收器串口**，不是独立枚举每只无线手套。
 
-`HexPartnerStatus.phase`：0 停止、1 搜索、2 连接/探测、3 接收器已开但等待数据、4 数据输出中、5 曾有数据而本轮中断超时、6 正在重试、7 失败。`last_fresh_ms[2]`、`fresh_hand_mask`、`attempts`、`failures` 可用于界面诊断。默认断流门限为 1000 ms，可在 `cfg.data_timeout_ms` 调整。断流不会把“接收器端口仍开着”错误报告为“接收器物理断开”。
+### 双有线串口（Windows x64）
+
+分别选择左手和右手的数据端口，用 `hex_partner_create_wired(glove, mocap, frame, &cfg, left_port, right_port)` 创建会话，再沿用上面的连接、更新和销毁流程。两个端口必须不同，端口顺序与手别对应。有线模式按指定端口打开，不执行自动扫描。
+
+两路串口独立解码，每只手保留自己的时间戳和新帧标记。双口中任一打开失败时，SDK 释放已打开的端口。连接或重试事件会指明失败的端口。读取左右手状态仍使用 `streaming_hand_mask` 与 `fresh_hand_mask`，自动档案按有序的左右串口组合保存。
+
+若应用自行管理连接，可以使用 `hex_glove_start_wired`、`hex_glove_get_wired_open_mask` 和 `hex_glove_get_last_wired_open_error`。关闭仍使用 `hex_glove_abort`。使用 partner 模式时由 partner 管理这两个端口。
+
+有线连接检查 `hex_glove_get_wired_open_mask`（两端口都开为 3）及各手的新帧位。接收器 ID、无线信道、接收器配对队列仅用于无线模式。有线设备各自产生时间戳，单手暂时停发时仍可读取另一手的新帧。若物理端口断开，需重新打开这一对端口。
+
+原始四路 120 Hz 重采样依赖单接收器的配对队列。进入双有线时 SDK 关闭该重采样，有线会话请求开启会返回 0。双有线原始数据请读取 `hex_glove_get_raw_hand_frame` 的每手时间戳。解算后的骨架输出有独立的采样配置。
+
+`HexPartnerStatus.phase`：0 停止、1 搜索、2 连接/探测、3 接收器已开但等待数据、4 数据输出中、5 曾有数据而本轮中断超时、6 正在重试、7 失败、8 已暂停发流。`last_fresh_ms[2]`、`fresh_hand_mask`、`attempts`、`failures` 可用于界面诊断。默认断流门限为 1000 ms，可在 `cfg.data_timeout_ms` 调整。断流不会把“接收器端口仍开着”错误报告为“接收器物理断开”。
 
 每次状态变化产生递增的 `event_sequence`；用 `hex_partner_get_event(partner, last_sequence, &event)` 取后续事件，返回 1 有事件、2 没有新事件、0 参数错误。SDK 保存最近 32 条事件；接入方应每轮取完。事件在调用 `tick` 的线程产生，**没有后台回调**。Qt 建议在专用工作线程调用全部 partner/glove/mocap/external API，再用 Qt 信号向界面线程传值。
 
@@ -61,9 +71,9 @@ hex_glove_destroy(glove);
 
 ## 2. 设备标识与校准文件
 
-`hex_partner_get_status` 返回当前串口 `port_utf8`、左右在线位和每手可读的 `device_code[2][3]`。`device_code` 只有两个字符，**不是已验证的物理唯一序列号**。当前配置按“接收器串口＋左右手槽位”绑定：一个 `.hexprofile` 文件包含同一接收器的左右手数据，文件名是端口 UTF-8 字节的十六进制表示，例如 `COM3` → `receiver-434f4d33.hexprofile`。用 `hex_partner_profile_path` 可查询实际路径。
+`hex_partner_get_status` 返回当前串口 `port_utf8`、左右在线位和每手可读的 `device_code[2][3]`。`device_code` 只有两个字符，**不是已验证的物理唯一序列号**。无线配置按“接收器串口＋左右手槽位”绑定：一个 `.hexprofile` 文件包含同一接收器的左右手数据，文件名是端口 UTF-8 字节的十六进制表示，例如 `COM3` → `receiver-434f4d33.hexprofile`。用 `hex_partner_profile_path` 可查询实际路径。
 
-新版本在打开串口后自动发送读 ID 指令。应用可用 `hex_glove_get_device_id(glove, id, sizeof(id))` 从 partner 借用的 glove 句柄读取六位**接收器** ID；未收到回复时返回 `0`，必要时用 `hex_glove_request_device_id(glove)` 重发。该 ID 不属于左右手套各自的独立序列号；现有 `.hexprofile` 自动绑定方式仍按端口与左右槽位，尚未迁移至 ID 命名。
+无线模式在打开接收器后自动发送读 ID 指令。应用可用 `hex_glove_get_device_id(glove, id, sizeof(id))` 从 partner 借用的 glove 句柄读取六位**接收器** ID；未收到回复时返回 `0`，必要时用 `hex_glove_request_device_id(glove)` 重发。该 ID 不属于左右手套各自的独立序列号；现有 `.hexprofile` 自动绑定方式仍按端口与左右槽位，尚未迁移至 ID 命名。
 
 设置 `cfg.profile_dir_utf8` 后，`cfg.auto_load_profile=1` 会在接收器打开时自动读取该端口的现有 profile；没有文件时继续等待数据，不伪造校准结果。`cfg.auto_save_profile=1` 会在本接口启动的 R 或完整标定成功后保存 profile；也可手动调用 `hex_partner_profile_save/load`。保存时先写新文件并保留旧文件备份，再替换目标。若接收器串口号改变，或在相同端口更换手套，请由上位机重新选择/确认配置；当前硬件字段不足以自动证明是同一物理设备。保存失败会单独发出事件，不能把“标定成功”误认为“已持久化”。
 
@@ -81,6 +91,6 @@ hex_glove_destroy(glove);
 
 ## 5. 运行环境和已知边界
 
-- 当前交付的 Windows 库为 **x64、MinGW** 构建，附带 `libHexaCercleGlove.dll.a` 与 `libgcc_s_seh-1.dll`、`libstdc++-6.dll`、`libwinpthread-1.dll`。Qt 6.5 MinGW 套件可链接该导入库；Qt MSVC 套件需要另行验证并提供 MSVC 导入库，或通过 `QLibrary` 动态加载 C ABI。SDK CMake 源码有 MSVC 分支，但这不等于已交付 MSVC 构建。
+- 11.20-MSVC Windows 库为 **Visual Studio 2022 MSVC、x64、Release** 构建，附带 `HexaCercleGlove.lib` 及实际依赖的 VC 运行库 DLL。Qt 使用 MSVC x64 套件并链接该 `.lib`；部署时复制 SDK DLL 和随附的 VC 运行库。Linux `.so` 保留自 10.16 原包，本次未更新。
 - SDK 通过 Windows 系统串口 API 打开接收器；需要设备在系统中出现 COM 端口。端口以独占方式打开：若旧上位机占用，先关闭旧程序，再连接。本 SDK 不要求运行 `HexacercleGlove.exe`。接收器型号、专用 USB 驱动及商业授权条款应以硬件供方资料核定；代码内未发现可据此承诺的完整清单。
 - `hex_partner_tick` 所有调用由接入方线程驱动；数据频率取决于设备发帧与调用频率，不应把示例循环 20 Hz 当作硬件帧率或端到端延迟保证。真正性能需在目标接收器和 Windows 机器上测量。

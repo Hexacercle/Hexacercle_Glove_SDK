@@ -1,12 +1,10 @@
 # HexaCercle 手套 SDK｜API 概览
 
-**10.27 版本说明**：本目录对外精简头文件的函数名称与签名保持 10.16 范围；当前库内部新增 27 项导出，但未纳入本次对外承诺。既有连接、骨骼、角度接口可继续按本页接入；新库的滤波、快速 R、腕部姿态与档案行为差异见[10.16 → 10.27 接口变更说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。
-
 > **接口类型**：本地 C ABI（Windows DLL／Linux SO）  
 > **适用对象**：C++17、Qt 6.5+、Python `ctypes` 接入方  
-> **文档版本**：2026-10-27；函数声明以随包 `library/include/hex_glove/` 为准
+本页对应 11.20-MSVC。Windows C ABI 见 `library/include/hex_glove/`。Linux x64 沿用 10.16 的单接收器库，编译时使用 `library/linux-x64/include`。
 
-[文档入口](README.zh-CN.md) · [接入指南](EXTERNAL_INTEGRATION.zh-CN.md) · [函数参数](EXTERNAL_API_PARAMETERS.zh-CN.md) · [工作流接口](PARTNER_INTEGRATION.zh-CN.md) · [交付状态](WINDOWS_CPP_SDK_DELIVERY_STATUS.zh-CN.md)
+[文档入口](README.zh-CN.md) · [接入指南](EXTERNAL_INTEGRATION.zh-CN.md) · [函数参数](EXTERNAL_API_PARAMETERS.zh-CN.md) · [工作流接口](PARTNER_INTEGRATION.zh-CN.md) · [库与头文件](library/README.zh-CN.md)
 
 ## 本页目录
 
@@ -25,9 +23,11 @@
 | --- | --- | --- |
 | 自动搜索、连接、重连 | `hex_partner_connect`、`hex_partner_tick` | 通过 `HexPartnerStatus.phase` 判断最终阶段；连接请求受理不等于已收到数据。 |
 | 手动打开与关闭串口 | `hex_glove_start`、`hex_glove_abort` | 已知端口且应用自行管理连接时使用。 |
+| Windows 双有线串口 | `hex_partner_create_wired` 或 `hex_glove_start_wired` | 左、右各用一个数据口，分别检查每手新帧与时间戳。 |
 | 六位接收器设备 ID | `hex_glove_get_device_id` | 打开端口后自动请求；有效回复到达才返回 `1`。 |
 | 电量、信道、固件与硬件 | `hex_glove_get_device_snapshot`、`hex_glove_get_hardware_info` | 检查在线、回复和 `valid` 字段。 |
 | R 与校准档案 | `hex_mocap_start_r_capture`、`hex_mocap_profile_load` | 双手 R 同轮采集；档案当前按端口和左右槽位管理。 |
+| Windows 七步与对指显示 | `hex_mocap_seven_step_begin_endpoints`、`hex_mocap_get_contact_endpoint_status`、`hex_mocap_set_opposition_assist_enabled` | M11 映射按指采集捏、掐两个端点。Qt 的“对指吸附”可在显示时切换，校准和档案独立。 |
 | 左右手各 21 骨骼节点 | `hex_mocap_get_display_pose` | 只有 `tracked_mask` 对应的节点代表当前实时跟踪。 |
 | 15 项关节角与统一快照 | `hex_external_update`、`hex_external_get_frame` | 检查 `fresh_hand_mask` 与 `angle_valid_mask`；角度单位为度。 |
 | 连接与接收诊断 | `hex_mocap_get_status`、`hex_glove_get_receive_diagnostics` | 区分无连接、等待数据、未完成 R、持续丢帧。 |
@@ -36,9 +36,9 @@
 
 ## 接收器设备 ID
 
-SDK 成功打开串口并清空旧接收缓存后，自动发送 ID查询并接收解码解码为接收器设备 ID `114205`。该 ID 属于**接收器**，不是左右手各自的独立 ID，也不等同于原有两字符 `device_code`。
+无线接收器启动后自动收到一次读 ID 请求。收到有效回复后可读六位接收器 ID，例如历史测试的 `114205`。双有线模式没有共享接收器，连接状态以左右数据口和每手新帧为准。
 
-包含 `hex_hardware_info_api.h`，用 `char device_id[7]{}; hex_glove_get_device_id(glove, device_id, sizeof(device_id))` 读取。返回 `1` 表示收到有效 ID，`0` 表示尚未收到、串口未打开或缓冲区不足；不要把 `0` 当作设备 ID 为零。若一直未收到，可调用 `hex_glove_request_device_id(glove)` 重新发送，再轮询读取；该函数返回 `1` 只表示指令写入串口。断开/重连会清空旧 ID。高层 partner 创建时仍可通过其借用的 `glove` 句柄读取。当前校准档案的自动绑定仍按接收器端口和左右手槽位，设备 ID 不会自动迁移旧档案。
+包含 `hex_hardware_info_api.h`，用 `char device_id[7]{}; hex_glove_get_device_id(glove, device_id, sizeof(device_id))` 读取。返回 `1` 表示收到有效 ID，`0` 表示尚未收到、串口未打开或缓冲区不足；不要把 `0` 当作设备 ID 为零。若一直未收到，可调用 `hex_glove_request_device_id(glove)` 重新发送，再轮询读取；该函数返回 `1` 只表示指令写入串口。断开/重连会清空旧 ID。高层 partner 创建时仍可通过其借用的 `glove` 句柄读取。无线校准档案按接收器端口和左右手槽位绑定，设备 ID 不会自动迁移旧档案。
 
 ## 自动连接与工作流
 
@@ -48,9 +48,10 @@ SDK 成功打开串口并清空旧接收缓存后，自动发送 ID查询并接�
 
 | 函数 | 作用 |
 | --- | --- |
-| `hex_partner_get_api_version` | 取得工作流 ABI 版本，当前 `0x00030000`。 |
+| `hex_partner_get_api_version` | 读取工作流版本。以当前平台配套头文件及库的返回值为准。 |
 | `hex_partner_config_init` | 初始化带 `struct_size` 的探测、重连、断流及档案配置。 |
 | `hex_partner_create` / `hex_partner_destroy` | 借用/释放高层控制器；不转移底层句柄所有权。 |
+| `hex_partner_create_wired` | Windows 指定一对有序的左、右数据口。后续继续使用 `connect → tick → get_status/get_event`。 |
 | `hex_partner_connect` / `hex_partner_disconnect` | 启动搜索连接事务 / 停止重连并关闭串口。连接返回 1 只表示受理。 |
 | `hex_partner_stream_control` | 发送开始或停止发流命令，成功表示串口写入，非设备确认。 |
 | `hex_glove_get_last_open_error` | 读取底层串口打开失败阶段和操作系统原始错误码。 |
@@ -64,7 +65,7 @@ SDK 成功打开串口并清空旧接收缓存后，自动发送 ID查询并接�
 | `hex_partner_profile_save` / `hex_partner_profile_load` / `hex_partner_profile_path` | 保存、加载和查询当前接收器端口绑定的双手档案。 |
 | `hex_partner_encode_legacy_udp` | 从最新帧编码既有 UDP JSON。channel 0 角度、1 姿态、2 位置、3 旋转；UTC Unix 毫秒由调用方提供。 |
 
-`status.operation_sequence/kind/state/error` 表示最近操作的 ID、类型、RUNNING/SUCCEEDED/FAILED/CANCELLED 和失败原因；事件中有对应操作 ID。`phase` 区分搜索、连接、等待数据、流、断流、重试及失败。初次开口后无数据超过 `data_timeout_ms` 也进入断流。事件由调用 `tick` 的线程产生，没有后台用户回调。`device_code` 只有两个字符，不代表唯一物理序列号；档案按“接收器端口＋左右槽位”管理。
+`status.operation_sequence/kind/state/error` 表示最近操作的 ID、类型、RUNNING/SUCCEEDED/FAILED/CANCELLED 和失败原因；事件中有对应操作 ID。`phase` 区分搜索、连接、等待数据、流、断流、重试及失败。初次开口后无数据超过 `data_timeout_ms` 也进入断流。事件由调用 `tick` 的线程产生，没有后台用户回调。`device_code` 只有两个字符，不代表唯一物理序列号；无线档案按接收器端口管理，有线档案按左、右数据口的有序组合管理。
 同一控制器一次只保留一项最近操作结果；连接/标定尚在 RUNNING 时不要并发发起档案保存或加载。调用返回 0 时查询 `last_error`，异步最终结果则查询 `operation_state/error`。
 
 位置映射请注意：`HexMocapDisplayPose.local_position` 是相对父节点的米，旧 UDP 位置是相对手掌的厘米。旧 UDP 角 `pitch/side/roll/two_pitch/end_pitch` 与 Hub 关节屈伸并非同一字段。精确角度单位为度，伸直校准后接近 0°，允许部分负角；精确 `finger[5][4]` 不含单独 CMC，CMC 通过 Angle Hub 获取。两手共享 Unity 坐标和关节顺序，但局部轴及拇指修正各自处理。详见 [接入与诊断流程](PARTNER_INTEGRATION.zh-CN.md)。
@@ -73,7 +74,7 @@ SDK 成功打开串口并清空旧接收缓存后，自动发送 ID查询并接�
 
 面向上位机的一体化搜索、重连、状态事件、标定流程与 profile 自动管理，参见[上位机对接指南](PARTNER_INTEGRATION.zh-CN.md)和 `hex_partner_api.h`。它复用同一套骨骼与快照 API；接入方应选择一种更新循环，不要在 `hex_partner_tick` 后额外调用 `hex_external_update`。
 
-原生库：Windows `HexaCercleGlove.dll`，Linux `libHexaCercleGlove.so`。对外使用 C ABI，包含 `library/include/hex_glove/hex_glove_api.h`、`hex_mocap_api.h`、`hex_angles_api.h`、`hex_external_api.h`；硬件信息结构及查询声明位于 `hex_hardware_info_api.h`。所有句柄由创建它的应用负责释放。
+原生库：Windows `HexaCercleGlove.dll`，Linux `libHexaCercleGlove.so`。对外使用 C ABI，使用当前平台头文件目录下的 `hex_glove/hex_glove_api.h`、`hex_mocap_api.h`、`hex_angles_api.h`、`hex_external_api.h`；硬件信息结构及查询声明位于 `hex_hardware_info_api.h`。所有句柄由创建它的应用负责释放。
 
 ## 统一单帧快照与接入诊断
 
@@ -199,7 +200,7 @@ R 状态：`0` 空闲、`1` 采样、`2` 完成、`3` 失败、`4` 取消。`pro
 - 实时 `timestamp_ms` 是宿主单调时间，不是 Unix UTC 时间。
 - 仅消费 `tracked_mask` 对应的实时骨骼；模型有效位与跟踪有效位含义不同。
 
-> 版本提示：Windows 库已同步至当前源码构建；随包 Linux 库已于 2026-10-27 从当前源码构建。外部接口以本文件和精简头文件为准，但 Linux 运行行为须在目标环境验证。
+11.20-MSVC 的 Windows x64 DLL 合入新版手势校准及双有线连接。Linux x64 沿用 10.16 的单接收器库，编译时使用 `library/linux-x64/include`。
 
 
 

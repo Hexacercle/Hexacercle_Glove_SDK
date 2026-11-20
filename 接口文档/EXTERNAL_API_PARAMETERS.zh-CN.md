@@ -1,11 +1,9 @@
 # 对外 SDK 函数参数手册
 
-**10.27 参数核对**：对外函数名与 C 签名沿用 10.16，以下参数表继续适用；运行效果及档案版本差异见[10.16 → 10.27 接口变更说明](../SDK_CHANGELOG_10.16_TO_10.27.zh-CN.md)。新内部接口不在本手册的开放范围。
-
 本手册与 [对外 API 说明](EXTERNAL_API.zh-CN.md) 配套，按交付头文件列出接入所需函数的**完整 C 签名、每个参数、返回值与调用条件**。具体结构体字段和 21 节点顺序以随包 `library/include/hex_glove/` 中的头文件为准。库中还有内部函数，本手册只覆盖对外接入接口。
 
 > **阅读顺序**：[文档入口](README.zh-CN.md) → [接入指南](EXTERNAL_INTEGRATION.zh-CN.md) → 本页参数与返回值。  
-> **适用版本**：2026-10-27 配套 Windows x64／Linux x64 库；调用前应按 `hex_mocap_get_abi_info` 核对结构布局。
+Windows 11.20-MSVC 增加四个有线入口。Linux x64 沿用 10.16 的单接收器库，编译时使用 `library/linux-x64/include`。调用前可用 `hex_mocap_get_abi_info` 核对其列出的结构大小。
 
 ## 本页目录
 
@@ -31,7 +29,7 @@
 
 ## 关键接口详解
 
-以下五组接口按接入顺序排列。每组均采用固定结构；后文[完整函数索引](#2-高层连接与标定hex_partner_apih)补齐其他函数。示例使用 C++17，返回值都是直接调用原生 C ABI 的结果。
+以下按调用顺序列出常用 API。完整签名和返回值见后文各模块的函数表。
 
 ### 打开串口：`hex_glove_start`
 
@@ -50,7 +48,7 @@ int hex_glove_start(HexGloveHandle handle, const char* port_name);
 
 ### 读取接收器 ID：`hex_glove_get_device_id`
 
-**接口描述**：获取 SDK 在当前串口连接中解析的六位 ASCII 接收器 ID。示例回复对应 `114205`。这是一个接收器 ID，不是左右手各自的序列号。
+**接口描述**：获取无线单接收器连接中解析的六位 ASCII 接收器 ID。双有线模式不提供此 ID。示例回复对应 `114205`。这是一个接收器 ID，不是左右手各自的序列号。
 
 ```c
 int hex_glove_get_device_id(HexGloveHandle handle, char* output, uint32_t capacity);
@@ -152,6 +150,7 @@ int hex_mocap_start_r_capture(HexMocapHandle handle, int hand_mask, float second
 | `uint32_t hex_partner_get_api_version(void)` | 无参数。 | 工作流 ABI 版本号。 |
 | `int hex_partner_config_init(HexPartnerConfig* config)` | `config`：调用方可写配置结构，随后可修改端口、超时等字段。 | `1/0`；创建 partner 前调用。 |
 | `HexPartnerHandle hex_partner_create(HexGloveHandle glove, HexMocapHandle mocap, HexExternalHandle external, const HexPartnerConfig* config)` | `glove`：已创建且空闲的手套句柄；`mocap`：由此 glove 创建的骨骼句柄；`external`：同一对句柄创建的可选快照句柄，可为 `NULL`；`config`：经初始化的配置。 | 成功返回句柄，失败返回 `NULL`；不接管传入句柄所有权。 |
+| `HexPartnerHandle hex_partner_create_wired(HexGloveHandle glove, HexMocapHandle mocap, HexExternalHandle external, const HexPartnerConfig* config, const char* left_port, const char* right_port)` | Windows x64。借用空闲 glove、由它建立的 mocap，以及可选的同组 external。`config` 须已初始化。两个 UTF-8 数据口按左、右指定，须互异。 | 成功返回会话，参数错误返回 `NULL`。此时尚未打开串口，随后调用 `hex_partner_connect` 并定时 `tick`。 |
 | `void hex_partner_destroy(HexPartnerHandle handle)` | `handle`：partner 句柄。 | 无返回；先于底层三个句柄销毁。 |
 | `int hex_partner_connect(HexPartnerHandle handle, int64_t monotonic_ms)` | `monotonic_ms`：调用时的主机单调毫秒。 | `1` 表示连接请求受理，**不表示串口或双手已就绪**；继续 `tick` 并查 `phase`、`fresh_hand_mask`。 |
 | `int hex_partner_disconnect(HexPartnerHandle handle)` | `handle`：目标会话。 | `1/0`；停止自动重连并关闭串口。 |
@@ -204,6 +203,9 @@ int hex_mocap_start_r_capture(HexMocapHandle handle, int hand_mask, float second
 | `HexGloveHandle hex_glove_create(void)` | 无参数。 | 成功返回会话，失败 `NULL`；尚未打开串口。 |
 | `void hex_glove_destroy(HexGloveHandle handle)` | `handle`：会话。 | 无返回；应在销毁 mocap 后调用。 |
 | `int hex_glove_start(HexGloveHandle handle, const char* port_name)` | `port_name`：UTF-8 串口名。 | `1/0`；失败后查 `hex_glove_get_last_open_error`。 |
+| `int hex_glove_start_wired(HexGloveHandle handle, const char* left_port, const char* right_port)` | Windows x64。两个以 NUL 结尾的 UTF-8 数据口按左、右指定，须互异。各端口的帧须匹配该手。 | `1` 表示两口均已打开并启动，`0` 表示失败，本次已打开的端口会关闭。 |
+| `uint32_t hex_glove_get_wired_open_mask(HexGloveHandle handle)` | Windows x64。查询物理串口的当前打开状态，位 0 左，位 1 右。 | 两口均开为 `3`，无线模式或无效句柄为 `0`。实际入帧另查 `fresh_hand_mask`。 |
+| `int hex_glove_get_last_wired_open_error(HexGloveHandle handle, int* hand, uint32_t* stage, uint32_t* platform_code)` | Windows x64。三个输出指针均须有效。`hand` 为 0 左、1 右、−1 无单侧错误。阶段值沿用下一行。`platform_code` 是原始系统码。 | `1` 表示成功读取诊断，`0` 表示参数无效。阶段为 0 表示未记录打开错误。 |
 | `int hex_glove_get_last_open_error(HexGloveHandle handle, uint32_t* stage, uint32_t* platform_code)` | `stage`：失败阶段输出（`0` 无、`1` 端口名、`2` 系统打开、`3` 串口配置、`4` 启动命令）；`platform_code`：原始系统错误码输出。 | `1/0`；两输出指针必须有效。 |
 | `void hex_glove_abort(HexGloveHandle handle)` | `handle`：已启动会话。 | 无返回；正常断开并关闭串口。 |
 | `int hex_glove_get_device_snapshot(HexGloveHandle handle, HexGloveDeviceSnapshot* out)` | `out`：设备基础信息输出。 | `1/0`；仍检查左右在线、信道回复和硬件字节有效位。此结构没有 `struct_size`。 |
@@ -235,6 +237,11 @@ int hex_mocap_start_r_capture(HexMocapHandle handle, int hand_mask, float second
 | `int hex_mocap_profile_load(HexMocapHandle handle, const char* path_utf8)` | `path_utf8`：校准配置文件路径。 | `1/0`；宜在逐帧求解前加载。 |
 | `int hex_mocap_start_r_capture(HexMocapHandle handle, int hand_mask, float seconds)` | `hand_mask`：`1/2/3`；`seconds`：采样时长（秒）。 | `1/0`；随后持续 `update` 并查询 R 进度；双手 mask 3 同时采样。 |
 | `int hex_mocap_get_r_capture_info(HexMocapHandle handle, HexMocapRCaptureInfo* info)` | `info`：先设 `struct_size`。 | `1/0`；读取 `state`、`hand_mask`、`progress` 和新帧手位。 |
+| `int hex_mocap_seven_step_begin_endpoints(HexMocapHandle handle, int hand_mask)` | Windows x64。以规范 M11 映射及所选手有效输入开始 Q17 七步，掩码 1 左、2 右、3 双手。 | `1` 表示成功启动，持续更新并查询七步状态，按手读取端点采样状态。 |
+| `int hex_mocap_get_contact_endpoint_status(HexMocapHandle handle, int hand, HexMocapContactEndpointStatus* status)` | Windows x64。`hand` 为 0/1，输出先设 `struct_size`。 | `1` 表示读出状态。查看 `phase`、`completed_mask`、`pinch_samples`、`claw_samples`。前三个基础姿势阶段可返回 phase 0。 |
+| `int hex_mocap_contact_recapture(HexMocapHandle handle, int hand_mask)` | Windows x64。在 Q17 对指步骤暂停时，选择当前需重采的手。 | `1` 表示开始重采，当前指已采集的捏、掐端点将重置。仅继续已有采样时使用 `hex_mocap_contact_retry`。 |
+| `int hex_mocap_set_opposition_assist_enabled(HexMocapHandle handle, int enabled)` | Windows x64。`0` 关、`1` 开，控制整个会话双手的对指显示辅助。 | `1/0`。切换在下一次跟踪采样生效。SDK 新建会话默认开，Windows Qt 示例显式设为关。加载档案后继续使用当前选择。 |
+| `int hex_mocap_get_opposition_assist_enabled(HexMocapHandle handle, int* enabled)` | Windows x64。必填非空输出指针。 | `1` 表示成功读出 `0/1`。该选项保存在会话内，写出档案时不保存。 |
 | `int hex_mocap_calibrate_angles(HexMocapHandle handle, int hand_mask)` | `hand_mask`：`1/2/3`，所选手须有有效姿态并保持伸直中立。 | `1/0`；在传感器 R 后建立**独立的几何角度零位**。 |
 | `int hex_mocap_get_precise_angles(HexMocapHandle handle, int hand, HexAnglesSnapshot* angles)` | `hand`：`0/1`；`angles`：先设 `struct_size`。 | `1/0`；检查 `calibrated` 和 `valid_mask`。`finger[5][4]` 无独立拇指 CMC 项。 |
 | `uint32_t hex_mocap_get_api_version(void)` | 无参数。 | 软件 API 版本号，非设备固件版本。 |
