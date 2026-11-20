@@ -2,13 +2,13 @@
 
 `main.py` 用 Python `ctypes` 直接调用本交付包的 XGF SDK，打开手套串口、加载可选的 `.hexprofile`、执行普通 R 快速校准，并在 MuJoCo 窗口中绘制所选手的 21 个骨骼节点及 20 条父子连线。它不需要 Unity、ROS、CAN 或机器人驱动。
 
-连接后控制台会在收到串口回复时打印六位接收器设备 ID。
+该示例通过单个无线接收器读取左右手，收到设备回复后打印六位接收器 ID。Windows 双有线连接及新版七步校准见 [Qt 示例说明](../README.md)。
 
 ## 运行
 
 需要 Python、`numpy` 和 `mujoco`；串口须由本程序独占。Windows 使用本包 `接口文档/library/windows-x64` 中的 DLL，Linux 使用 `接口文档/library/linux-x64` 中的 `.so`。以下命令在本示例目录 `examples/mujoco_sdk_skeleton` 执行，端口需替换成实际值。
 
-本目录已放置 `10030.hexprofile` 和 `xgf_skeleton.json`，与 `main.py` 同级。启动时会自动加载这两个文件，与当前工作目录无关；因此不必在命令行重复写 `--profile` 或 `--skeleton`。想使用其他文件时，可显式指定这两个参数；`--no-profile` 可忽略默认 profile。
+随包提供 `xgf_skeleton.json` 和用于旧 Linux 库的历史示例档案 `10030.hexprofile`。Windows 默认从 JSON 骨架开始，Linux 默认加载同目录的历史档案。需要恢复个人校准时，加 `--profile 匹配的档案.hexprofile`。显式指定的文件无法加载时，程序会报错退出。两平台都可以用 `--skeleton` 指定目标骨架。
 
 Windows PowerShell：
 

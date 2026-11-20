@@ -197,8 +197,8 @@ def main():
                         default=default_skeleton if default_skeleton.is_file() else None,
                         help="21-node skeleton JSON; defaults to adjacent xgf_skeleton.json")
     parser.add_argument("--profile", type=Path,
-                        default=default_profile if default_profile.is_file() else None,
-                        help="SDK profile; defaults to adjacent 10030.hexprofile")
+                        default=default_profile if os.name != "nt" and default_profile.is_file() else None,
+                        help="optional calibration profile; Linux defaults to the bundled 10030.hexprofile")
     parser.add_argument("--no-profile", action="store_true", help="ignore the adjacent default profile")
     parser.add_argument("--r", action="store_true", help="perform ordinary 2-second R even with a profile")
     parser.add_argument("--check", action="store_true", help="load SDK/configuration without serial port or viewer")
