@@ -1,0 +1,253 @@
+# 11.20-MSVC · Qt 三维手骨架接入说明
+
+本说明面向使用 11.20-MSVC Windows x64 DLL、通过 Qt 显示 `kulou_shou_New1.fbx` 的开发者。随包 Qt 示例提供双手线框，可用于在接入 FBX 前核对手别、骨长和校准。绑定到 FBX 时，还要写入指骨的局部位置，并核对 Qt 导入后的父链与蒙皮。
+
+文中的 `drawSdkLine`、`sdkWorldToScene`、`BoneBinding` 等名称代表接入程序要实现的渲染和绑定逻辑。随包可编译示例及命令见 [Windows Qt 启动说明](../examples/README.md)。目标 FBX 的最终显示效果请按第 4 节在实际设备上验收。
+
+## 1. 目标与边界
+
+### Windows 接入和校准选择
+
+- 无线连接填一个接收器口。有线连接填两个实际数据口，顺序为左、右，例如 `qt_skeleton_viewer.exe --wired COM12 COM14 --no-profile`。端口可在连接前更换。
+- 初次使用可从 Qt 默认 M11 映射开始七步。前三步依次为平放、伸直、握拳。后四步依次对食指、中指、无名指、小指各保持一次指腹捏和指尖掐，两次之间可松开。每手按画面提示保持并等待端点采样通过。换手势的过渡过程由模型推算。
+- 再次佩戴已校准的手套可先加载匹配的档案，执行两秒快速 R。手指伸直时另做“角度归零”后再读取关节角数据。使用 `--no-profile` 可以在本会话完成七步，退出后结果随会话释放。
+- Qt 默认关闭“对指吸附”。打开后，支持该校准方式的档案可在实时显示中应用指尖闭合和腕部接触辅助。取消勾选仍会使用已校准的每指驱动。该选项作用于双手，在此程序中切换端口后沿用，不写入档案，也不改变七步采样结果。
+
+最终验收分五项，按顺序进行：
+
+1. 串口有新帧，每只手能读到 SDK 最终的 21 节点 `HexMocapDisplayPose`。
+2. 独立于 FBX，用 `world_position[21]` 画出稳定、方向正确的双手线框。
+3. 加载 `.hexprofile` 成功，并核对其目标静止骨架与 Qt 导入的 FBX。
+4. 普通快速 R 采集以状态 `COMPLETE` 结束，之后新帧继续输出；双手 R 同时采集。
+5. 21 个 FBX 骨节点与 SDK 节点重合；再检查网格蒙皮、独立掌骨和指骨表面。
+
+这里的“SDK 骨架正确”和“FBX 网格正确”是两个不同的验收结果。`world_position` 是 SDK 世界坐标（米、Unity 轴），适合独立线框、测长和最终对照；`local_position/local_rotation/local_scale` 是相对父节点的局部 TRS，适合驱动**层级相同**的 FBX 骨节点。不要把 `world_position[i]` 直接写给指骨的局部 `position`，也不要根据每帧世界坐标缩放整只 FBX。
+
+## 2. 文件、结构及节点顺序
+
+Windows 工程只使用本交付包 `接口文档/library/include/` 的头文件、`接口文档/library/windows-x64-MSVC/HexaCercleGlove.lib` 和同目录 DLL。编译器使用 MSVC x64 C++17；Qt 侧选择对应的 MSVC x64 Kit。应用运行时放置本 DLL 与配套 VC 运行库；`.lib` 是导入库，不是静态 SDK。Qt Quick 3D/FBX 导入及皮肤网格组件由 Qt 工程自行配置。
+
+| 手 | `hand` | 帧位 |
+| --- | ---: | ---: |
+| 左 | 0 | `1u << 0` |
+| 右 | 1 | `1u << 1` |
+
+每手节点：`0` 掌；`1–4` 拇；`5–8` 食；`9–12` 中；`13–16` 无名；`17–20` 小。每指的第 1 节点是指根，其余节点顺着指尖方向排列。父节点以加载后 `HexMocapSkeletonDefinition.parent[21]` 为准，不要只凭 FBX 名称猜。该 FBX 左无名指使用 `hc_Ling1_L`～`hc_Ling4_L`，右手使用 `hc_Ring1_R`～`hc_Ring4_R`。
+
+| SDK 槽位 | 左手 FBX 目标节点 | 右手 FBX 目标节点 |
+| --- | --- | --- |
+| 0 | `hc_Hand_L` | `hc_Hand_R` |
+| 1–4 | `hc_Thumb1_L`～`hc_Thumb4_L` | `hc_Thumb1_R`～`hc_Thumb4_R` |
+| 5–8 | `hc_Index1_L`～`hc_Index4_L` | `hc_Index1_R`～`hc_Index4_R` |
+| 9–12 | `hc_Middle1_L`～`hc_Middle4_L` | `hc_Middle1_R`～`hc_Middle4_R` |
+| 13–16 | `hc_Ling1_L`～`hc_Ling4_L` | `hc_Ring1_R`～`hc_Ring4_R` |
+| 17–20 | `hc_Pinky1_L`～`hc_Pinky4_L` | `hc_Pinky1_R`～`hc_Pinky4_R` |
+
+FBX 中另有 `hc_Index_L`、`hc_Middle_L` 等辅助/掌骨节点；不能因为名称相近就把它们当作 21 个显示槽位。创建 `bindings` 时逐个验证目标对象存在且不重复，并验证**实际 Qt 父链**与 `definition.parent` 对应；若 FBX 中间有辅助节点，应显式处理它们的变换。
+
+`HexMocapDisplayPose.valid_mask` 表示定义了哪些节点；`tracked_mask` 表示哪些节点正在实时跟踪。结构体获取成功、`valid_mask` 非零或渲染出静止手，均不能替代实时跟踪判断。`HexExternalFrame.fresh_hand_mask` 表示本轮真正收到该手新帧；旧姿态可以暂时留在画面上，但不能记作新数据。
+
+## 3. 从 SDK 帧到 FBX
+
+下面使用 `hex_external_*` 路径。所有 SDK 调用在同一个应用线程串行执行；UI/渲染线程如不同，只传递复制后的帧。不要在同一轮同时调用 `hex_external_update` 和 `hex_mocap_update`。如原程序已经自己调用后者，改用 `hex_external_capture` 缓存该轮结果。
+
+### 步骤 1：创建句柄并检查 ABI
+
+包含 `hex_glove/hex_external_api.h`。先调用 `hex_mocap_get_abi_info`，输出结构先设置 `struct_size`，至少确认 `display_joint_count==21`、`pointer_size==sizeof(void*)`，以及该 ABI 结构实际列出的 `quat_size` 等字段。**它不包含 `HexMocapDisplayPose` 或 `HexExternalFrame` 的大小，不能用它证明这两种结构的布局完全匹配**；必须使用同包头文件编译并设置各输出的 `struct_size`。再按顺序：
+
+```cpp
+HexGloveHandle glove = hex_glove_create();
+HexMocapHandle mocap = glove ? hex_mocap_create(glove) : nullptr;
+HexExternalHandle external = mocap ? hex_external_create(glove, mocap) : nullptr;
+if (!external) { /* 回收已创建的句柄，停止接入 */ }
+```
+
+`external` 借用同一对 `glove/mocap`，不接管销毁职责。
+
+### 步骤 2：打开串口之前加载真实档案
+
+```cpp
+if (!hex_external_profile_load(external, profilePathUtf8)) {
+    // 显示失败；不要默默改用合成骨架驱动真实 FBX。
+    return;
+}
+```
+
+`.hexprofile` 必须同时兼容本 DLL、匹配这套 FBX/佩戴状态；它保存目标骨架及校准配置。Windows 读取器识别 **v1–v34** 格式，并进一步检查结构、校验和、模型和既有对指映射兼容性。若加载返回 0，保留原文件，使用与设备匹配的档案或重新校准。写出版本随保存的内容确定，旧 Linux 库或旧 Windows 库可能无法读取新版档案。包内 `examples/mujoco_sdk_skeleton/10030.hexprofile` 是旧 Linux 示例使用的 v19 档案。Windows MuJoCo 默认读取同目录 JSON 骨架，个人档案须显式指定。`profile_load` 返回 1 只证明文件可导入，**不证明**模型与实际佩戴匹配；还必须核对目标骨架与实测手势。记录完整路径、版本、加载返回值、左右手状态。成功加载后**不要再调用** `hex_mocap_skeleton_definition_init` 得到的合成模型覆盖它；该初始化模型只供诊断。
+
+分别调用 `hex_mocap_get_skeleton_definition(mocap, hand, &def)`，`def.struct_size=sizeof(def)`，对照 Qt 导入后 FBX 的 21 个节点：父节点、静止局部位置、局部旋转、局部缩放和外部根。任何手取不到定义或父链不一致，先修配置/绑定，不进入网格验收。`root_position/root_rotation/root_scale` 属于节点 0 **外部父节点**；Qt 场景根也要与其采用一致的变换约定。
+
+### 步骤 3：打开串口，持续更新并取同轮双手帧
+
+下面示例使用一个无线接收器。双有线模式建议采用 [partner 工作流](PARTNER_INTEGRATION.zh-CN.md#双有线串口windows-x64)，以 `hex_partner_create_wired` 创建会话，每轮先执行一次 `hex_partner_tick`，再读取 `hex_external_get_frame`。左右各自检查新帧位和跟踪位，后续线框及 FBX 处理共用。
+
+```cpp
+if (!hex_external_start(external, portUtf8)) {
+    // 使用 hex_external_get_last_error 记录错误。
+    return;
+}
+
+// 每个接收/求解 tick 执行一次；不要每个渲染帧再额外更新 mocap。
+if (!hex_external_update(external)) {
+    // 查询 hex_external_get_last_error；连接刚建立时还应检查状态和新鲜度。
+    return;
+}
+HexExternalFrame frame{};
+frame.struct_size = sizeof(frame);
+if (!hex_external_get_frame(external, &frame)) return;
+
+for (int h = 0; h < 2; ++h) {
+    const uint32_t bit = 1u << h;
+    if ((frame.fresh_hand_mask & bit) == 0 ||
+        (frame.tracked_hand_mask & bit) == 0) continue;
+    const HexMocapDisplayPose& pose = frame.pose[h];
+    if ((pose.tracked_mask & 1u) == 0) continue; // 至少掌节点实时有效
+    inspectWorldPose(h, pose);                  // 步骤 4：线框和骨长
+    applyFbxPose(h, pose);                      // 步骤 7：模型；线框验收前暂时关闭
+}
+```
+
+`update_index` 是宿主捕获次数，不是设备帧号。分别记录 `frame.pose[h].timestamp_ms`、`frame.pose[h].frame_sequence`、`frame.fresh_hand_mask`、`frame.pose[h].tracked_mask`。`timestamp_ms` 是单调时间，不是 Unix UTC。连接已打开但等待数据时，不能凭 `hex_external_start` 成功判定两手都已可用。还可用 `hex_mocap_get_status` 与 `hex_glove_get_receive_diagnostics` 区分未连接、无同步帧、未完成 R 和接收错误。
+
+### 步骤 4：只用世界坐标画独立线框
+
+**取值入口是 `frame.pose[hand].world_position[node]`。** `frame` 来自步骤 3 的 `hex_external_get_frame(external, &frame)`；`hand=0/1` 分别为左/右手，`node=0..20`。SDK 没有另一个单独的“取节点世界位置”函数。也可以在自行调用 `hex_mocap_update(mocap)` 后，用 `hex_mocap_get_display_pose(mocap, hand, &pose)` 取每手结构体，但这与本文的 `hex_external_update` 路径**二选一**，不能在同一轮重复推进求解。
+
+以下是从 API 返回值到掌节点及食指根节点坐标的最短取值示例；`HexMocapVec3` 的 `x/y/z` 是**米**：
+
+```cpp
+HexExternalFrame frame{};
+frame.struct_size = sizeof(frame);
+if (!hex_external_update(external) ||
+    !hex_external_get_frame(external, &frame)) return;
+
+const int hand = 0; // 0 左、1 右
+const uint32_t bit = 1u << hand;
+if ((frame.fresh_hand_mask & bit) &&
+    (frame.tracked_hand_mask & bit)) {
+    const HexMocapDisplayPose& pose = frame.pose[hand];
+    const uint32_t needed = (1u << 0) | (1u << 5);
+    if ((pose.tracked_mask & needed) == needed) {
+        const HexMocapVec3 palm = pose.world_position[0];
+        const HexMocapVec3 indexRoot = pose.world_position[5];
+        // palm.x/y/z、indexRoot.x/y/z：该手本轮 SDK 世界坐标，单位米。
+    }
+}
+```
+
+实际帧循环只执行**一次** `hex_external_update`/`hex_external_get_frame`；上面短例与步骤 3 是同一轮调用的展开说明，不要原样重复调用。画整只手时，从 `definition[hand].parent[i]` 取父节点，仅当父子两个节点的 `tracked_mask` 位均存在时画线。调试线条直接用 `pose.world_position[parent]`、`pose.world_position[i]`，**不得取 FBX 节点位置再画一条“SDK 线”**。
+
+```cpp
+for (int i = 1; i < 21; ++i) {
+    const int parent = definition[h].parent[i];
+    if (parent < 0 || parent >= 21) continue;
+    const uint32_t both = (1u << i) | (1u << parent);
+    if ((pose.tracked_mask & both) != both) continue;
+    const auto& a = pose.world_position[parent];
+    const auto& b = pose.world_position[i];
+    const QVector3D va(a.x, a.y, a.z), vb(b.x, b.y, b.z);
+    const float lengthMm = (vb - va).length() * 1000.0f;
+    drawSdkLine(sdkWorldToScene(va), sdkWorldToScene(vb), h);
+    logLength(h, i, pose.frame_sequence, lengthMm);
+}
+```
+
+`sdkWorldToScene` 是**一套固定的** SDK 世界轴/单位到 Qt 场景轴/单位变换。先用掌节点为每只手单独设显示锚点画线框，便于检查手形；如要与 FBX 网格叠加，则必须再对齐场景根的位置、朝向和单位。验证全手旋转或快速 R 时，保持观察基准固定，不能每帧将掌心重新转到正面，否则会把腕部变化隐藏。
+
+线框验收：左右手槽位不反；逐根弯指、拇指独立动作方向正确；同一姿态下相邻节点距离稳定；断流时不把上一帧当新帧。若线框已异常，暂不调 FBX，先查 profile、R、收帧与 SDK 输出。
+
+### 步骤 5：在静止骨架上确定一次 Qt 单位比例
+
+不要逐帧从 `world_position` 重新计算 FBX 缩放。读取 Qt **导入后的静止**父子节点场景位置，计算各骨段：
+
+```text
+ratio[i] = Qt静止父子距离 / SDK静止父子距离（米）
+```
+
+SDK 静止值可由档案模型的 `rest_local_position`/根变换计算，或在模型已配置、未跟踪时读取其有效静止 `HexMocapDisplayPose.world_position`。检查**每只手全部 20 条父子骨段**的 `ratio[i]`，而非只看平均或多数；若各段在工程约定容差内一致，可把该比值作为**一次性的全局单位换算**。若某段比例不同，逐段核对绑定、父节点、中间辅助节点、模型几何和非均匀缩放；不能用一个手掌缩放值掩盖。比较长度不受两手在画面中摆放位置影响。另需用至少掌、食指根、小指根和中指根这些不共线点确定 Qt 导入后的固定轴/镜像变换；只比较距离无法发现左右镜像或轴向翻转。
+
+`pose.local_scale` 不是“这个 FBX 在 Qt 中应放大多少倍”。本版 SDK把指长/掌长调整主要写入子节点 `local_position`；`local_scale` 通常继承上传骨架的静止局部缩放。根的整体缩放另在骨架根/手型配置中体现。Qt FBX 导入器可能已经换算源文件单位或烘焙根缩放，必须以**导入后的节点**为准，避免重复乘比例。
+
+### 步骤 6：快速 R，按状态验收而非进度
+
+本节代码演示应用直接调用普通 R。随包 Qt 的“R 快速校准（2 秒）”走重新佩戴流程，在新鲜输入上重建手掌、手指安装零位并保留个人运动范围。需要重新测量四指对指时，在 Windows Qt 选择“七步手势校准”。
+
+已有有效、持续的新帧后，用户保持所选手中立，再调用：
+
+```cpp
+const int mask = 3; // 左 1，右 2，双手 3；双手必须同时在线。
+if (!hex_mocap_start_r_capture(mocap, mask, 1.0f)) {
+    showError("R 不能启动：检查目标手、有效输入与其他采集操作");
+    return; // 不要继续轮询上一次 R 遗留的 state。
+}
+// 继续每轮执行 hex_external_update(external)，不要停接收。
+HexMocapRCaptureInfo r{};
+r.struct_size = sizeof(r);
+if (hex_mocap_get_r_capture_info(mocap, &r)) {
+    if (r.state == HEX_MOCAP_R_COMPLETE) {
+        // 只有 state==2 才报告成功；等下一新帧再验收手掌/腕部姿态。
+    } else if (r.state == HEX_MOCAP_R_FAILED) {
+        // state==3：失败，即使 progress==1.0 也不能报告成功。
+    }
+}
+```
+
+检查 `r.fresh_hand_mask` 覆盖请求的 `mask`。录屏的 `Rcap 3(100%)` **如果**直接显示此 `state`，代表失败，不代表完成；须核对 UI 字段映射。SDK 在采集末尾仍需所选手的新鲜根/指尖输入，双手缺一侧或断流可能失败。成功加载已学习档案后的**普通快速 R**主要对齐手掌/腕部朝向，不重新学习拇指和四指接触手势；重新佩戴造成传感器安装变化时还需适合新佩戴状态的档案/完整标定。
+
+现有 `tryCalibrateHand()` 只有 `available` 门控，若它在首个非中立帧或快速 R 之后更新 `baseSdkQuat`，就可能把 R 的可见变化抵消。纯骨架直接驱动时先移除这层首帧相对基准；需要模型重定向时，基准应来自**稳定的静止骨架定义**，不能每次 R 后随意重设。快速 R 是否成功只由 SDK 状态判断，不以画面是否“突然跳一下”判断。
+
+只绘制骨骼不需要角度零位 API。若另外显示/导出 15 项角度，须在 R 成功后**等待所选手下一帧新鲜、完整跟踪的伸直中立姿态**，再调用 `hex_external_calibrate_angles(external, mask)`；该接口会拒绝所选手没有新鲜帧的缓存，也不替代快速 R。
+
+### 步骤 7：将 SDK 局部 TRS 应用到 FBX 骨节点
+
+仅在 Qt FBX 的 21 个目标节点与 SDK 定义的父子层级、静止轴、单位及外部根**已匹配**时使用直接驱动。步骤 4 的线框坐标经过 `sdkWorldToScene`，这里的局部 TRS 则必须沿 Qt FBX 导入后的**同一坐标基**应用；线框正确并不自动证明局部轴一致。把现有 `baseSdkQuat.conjugated()*q`、首帧自动基准和逐轴 `toEulerAngles()` 分支临时关闭，先取得可对照的直接实现：
+
+```cpp
+void applyFbxPose(int h, const HexMocapDisplayPose& pose) {
+    for (BoneBinding& b : bindings) {
+        if (b.hand != h || !b.object || b.node < 0 || b.node >= 21) continue;
+        const uint32_t bit = 1u << b.node;
+        if ((pose.valid_mask & bit) == 0 || (pose.tracked_mask & bit) == 0) continue;
+        const auto& p = pose.local_position[b.node];
+        const auto& q = pose.local_rotation[b.node]; // SDK: x,y,z,w
+        const auto& s = pose.local_scale[b.node];
+        const bool positionOk = b.object->setProperty("position",
+            QVector3D(p.x, p.y, p.z) * unitsPerMeter);
+        const bool rotationOk = b.object->setProperty("rotation",
+            QQuaternion(q.w, q.x, q.y, q.z).normalized()); // Qt: w,x,y,z
+        const bool scaleOk = b.object->setProperty("scale", QVector3D(s.x, s.y, s.z));
+        if (!positionOk || !rotationOk || !scaleOk) {
+            reportBindingError(h, b.node); // 确认属性确实存在并已写入。
+        }
+    }
+}
+```
+
+`unitsPerMeter` 是步骤 5 确定的单一换算，不是每帧动态比例。外部根与 SDK 根定义需单独对齐；画面左右分栏应通过两只手的外层容器实现。Qt 导入若改变了 FBX 的局部轴/父链或有中间节点，这段直接赋值**不能**正确重定向；需要按每节点静止基和父节点坐标建立明确变换，并在每帧将 Qt 的 21 个节点场景位置与经同一映射变换后的 SDK `world_position` 对照。不要靠左右手简单取反或对拇指的一个欧拉分量取反修补。
+
+如果必须限制某关节自由度，在线框和全四元数模型都正确之后，沿该 FBX 关节的实际铰链轴做 swing/twist 或显式轴投影；不要把三维四元数转欧拉角再逐分量相减。另核对任何自写 `toQtQuat`：正确顺序为 `QQuaternion(q.w,q.x,q.y,q.z)`。
+
+### 步骤 8：再验收 FBX 网格，而非只验收骨节点
+
+对每个有效节点同时记录 SDK `world_position[i]` 与 Qt 骨节点的场景位置，经同一根坐标变换后比较。掌、五个指根、各指节及指尖都应落在对应位置；骨长变化应来自配置/校准提交，不应随普通逐帧弯指来回伸缩。
+
+**该特定 FBX 还有额外网格几何问题**：XGF Unity 参考实现除应用 21 节点 TRS 外，还按目标骨长调整部分单骨蒙皮指骨的顶点，并对四指掌骨的独立刚性皮肤做仿射变形。移动 MCP 节点不会自动拉长那些掌骨网格。因此“21 节点都重合”仍可能出现网格缝隙、过短掌骨或指骨表面比例错。此时应检查 Qt 导入后的 skin/bindpose；按需将 Unity 的等价几何修正移植到 Qt，或预处理 FBX 的网格和绑定姿态。不要用每帧整体缩放 FBX 代替这一步。
+
+## 4. 推荐验收记录
+
+| 检查点 | 必须保存/显示的值 | 通过条件 |
+| --- | --- | --- |
+| 库和模型 | DLL 路径与哈希、profile 路径/加载结果、FBX 路径、21 节点父链 | 均来自同套 11.20-MSVC 交付及匹配模型 |
+| 接收 | 左右 `fresh_hand_mask`、`tracked_hand_mask`、各自时间戳/序号、接收诊断 | 所选手持续产生新帧；断流不伪造新帧 |
+| 线框 | 21 个 `world_position`、20 条父子边长度 | 单指方向正确，静止和弯曲时骨长稳定 |
+| R | 请求手位、`state`、`progress`、`fresh_hand_mask` | `state==2` 且所选手有新鲜样本；`3` 明确报失败 |
+| FBX 骨架 | 同帧 SDK/Qt 21 节点世界位置差、静止尺寸比 | 各节点重合，统一单位，无逐帧缩放 |
+| FBX 表面 | 指骨和独立掌骨网格、skin/bindpose | 无明显缝隙、拉伸或错误指骨长度 |
+
+完成判据：必须在目标 Qt 程序中使用**实际交付 DLL、实际档案、实际 FBX 和双手实机输入**记录上述项目。API 签名核对、无硬件编译或示例档案成功加载都不能代替完整显示验收。需保留 R 失败、断流、重新连接、左右手单独动作和拇指独立动作的录像/同帧日志，才能判定五项目标均已实现。
+
+## 5. 生命周期和其他接入模式
+
+退出时按 `hex_external_destroy(external) → hex_mocap_destroy(mocap) → hex_glove_abort(glove) → hex_glove_destroy(glove)`。所有输出结构先设 `struct_size=sizeof(结构体)`。
+
+若现有应用已经使用 `hex_partner_*` 负责串口搜索、自动重连和标定，应保留**一条**更新链：`hex_partner_connect → hex_partner_tick → hex_partner_get_status/hex_partner_get_calibration → 读取姿态 → hex_partner_disconnect`；partner 活跃期间不要另行调用 `hex_external_start/update`、`hex_glove_start/abort` 或 `hex_mocap_update`。对当前 Qt 集成建议先把本文 `hex_external_*` 直接路径做通并验收，再决定是否需要 partner 的自动重连。
