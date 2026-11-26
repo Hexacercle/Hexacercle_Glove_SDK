@@ -12,9 +12,10 @@
 | C++ 统一快照 | `examples/external_snapshot/main.cpp` | 同轮双手骨骼与角度、有效位、诊断、导出 | 约 30 秒自动退出 |
 | C++ 连接工作流 | `examples/partner_workflow` | 接收器搜索、连接状态、事件、档案加载 | 按 `--seconds` 自动退出 |
 | MuJoCo | `examples/mujoco_sdk_skeleton` | 双手 21 节点三维显示、配置与图形自检 | 关闭窗口或 Ctrl+C |
-| Qt | `examples/qt_skeleton_viewer` | 中文控制界面、骨骼、角度、校准和事件 | 关闭窗口 |
+| Qt 完整上位机 | `examples/qt_skeleton_viewer` | Windows 显示骨骼线框和 FBX，提供角度、校准及事件。Linux 显示骨骼线框 | 关闭窗口 |
+| Qt FBX 最小接入 | `examples/qt_fbx_embed` | Windows 三维手部控件、待机预览、串口跟踪和快速 R | 关闭窗口 |
 
-10.16 原包的历史实测环境（2026-10-16）：Ubuntu 22.04 x64、GCC 11.5、Python 3.10、Qt 6.5.3、NumPy 2.2.6、MuJoCo 3.4.0、GLFW 2.10.0；串口 `/dev/ttyUSB0`，接收器 ID `114205`。上述 7 个示例均已实机运行并正常退出，四个控制台角度示例均导出了左右手 CSV/JSON 数据。另验证了自动搜索及 MuJoCo 两种自检。
+10.16 原包的历史实测环境（2026-10-16）：Ubuntu 22.04 x64、GCC 11.5、Python 3.10、Qt 6.5.3、NumPy 2.2.6、MuJoCo 3.4.0、GLFW 2.10.0；串口 `/dev/ttyUSB0`，接收器 ID `114205`。当时的 7 个示例均已实机运行并正常退出，四个控制台角度示例均导出了左右手 CSV/JSON 数据。另验证了自动搜索及 MuJoCo 两种自检。
 
 本版 Windows 示例链接 11.20-MSVC x64 库。Linux 保留 10.16 的单接收器库及平台头文件，使用 `接口文档/library/linux-x64/include`。本版验证范围见[发布说明](../README.md)，10.16 的实机情况见[历史示例复测记录](SDK_EXAMPLE_TEST_REPORT.zh-CN.md)。
 
@@ -22,7 +23,7 @@
 
 - 每次只运行一个示例；运行前关闭旧上位机、其他示例或串口调试工具，避免串口被占用。
 - Python、编译器和 SDK 均使用 64 位版本。本文按 Python 3.10 及以上环境准备，10.16 历史测试使用 Python 3.10。
-- C++ 使用 C++17。Qt 示例需要 Qt Widgets，支持 Qt5/Qt6；本文以 Qt 6.5.3 为例。
+- C++ 使用 C++17。Windows Qt 完整示例和 FBX 最小示例使用 Qt 6.5.3 MSVC x64 Release。Linux 线框示例使用 Qt Widgets（Qt 5 或 Qt 6）。
 - 普通 Python 示例仅使用标准库；MuJoCo 示例另外需要 `numpy`、`mujoco` 和 `glfw`。
 - Windows 示例使用 `接口文档/library/include`；Linux 使用 `接口文档/library/linux-x64/include`。头文件与对应平台的预编译库保持同一套。
 - 随包 `10030.hexprofile` 仅保留作旧 Linux 示例。Windows 请从默认映射或兼容的个人档案开始。
@@ -195,7 +196,7 @@ Qt 顶部显示设备 ID、双手数据状态和观测帧率。双手平放、�
 
 ### 4.1 开发环境与公共准备
 
-准备 Visual Studio 2022（含“使用 C++ 的桌面开发”和 Windows SDK）、CMake、64 位 Python。Qt 示例另需 Qt Widgets 的 **MSVC x64 套件**，例如 Qt 6.5.3 `msvc2019_64`（可由 VS2022 工具链使用）或对应版本的 `msvc2022_64`。本包链接库为 `HexaCercleGlove.lib`。
+准备 Visual Studio 2022（含“使用 C++ 的桌面开发”和 Windows SDK）、CMake、64 位 Python。完整 Qt 示例和 FBX 最小示例使用 Qt 6.5.3 MSVC x64 Release。下例中 `msvc2019_64` 可由 VS2022 工具链使用。Windows 三维显示需要支持 OpenGL 3.3 的驱动。
 
 SDK 在设备管理器中应有可用 COM 端口。关闭占用该端口的旧程序。下面的 `C:\SDK\Hexacercle_SDK`、Qt 路径和 `COM3` 均为示例，请改成自己的实际值。
 
@@ -214,6 +215,7 @@ if ($SdkProfile) { $SdkProfileArgs = @("--profile", $SdkProfile) }
 $SdkPort = "COM3"
 $SdkQt = "C:\Qt\6.5.3\msvc2019_64"
 $env:PATH = "$SdkQt\bin;$SdkBin;$env:PATH"
+$env:QT_QPA_PLATFORM_PLUGIN_PATH = "$SdkQt\plugins\platforms"
 
 New-Item -ItemType Directory -Force test-results, test-results\profiles | Out-Null
 
@@ -332,15 +334,20 @@ python .\examples\mujoco_sdk_skeleton\main.py `
 
 以上 Windows 命令从随包 JSON 骨架启动。已有兼容的个人档案时，加 `--profile 文件路径` 恢复校准。关闭窗口或按 Ctrl+C 退出。
 
-### 4.9 Qt 6.5.3
+### 4.9 Windows 完整 Qt 示例
+
+已编译的 Windows x64 示例可直接打开 [qt_skeleton_viewer.exe](qt_skeleton_viewer/bin/qt_skeleton_viewer.exe)。该目录已随附 Qt 和 SDK 运行库。
+
+Qt 左侧显示 SDK 线框，右侧显示 Unity FBX 三维手部模型。三维视图使用 SDK 的 Windows 组件 `HexQtFbxView.dll`，模型资源随组件内置。运行电脑需要支持 OpenGL 3.3 的驱动。
+
+已有 Qt 项目时，可从 [Qt 三维视图接入说明](../接口文档/QT_FBX_INTEGRATION.zh-CN.md) 和 [最小接入示例](qt_fbx_embed/main.cpp) 开始。Windows 示例使用 Qt 6.5.3 MSVC x64 Release。
 
 使用独立的 Windows 构建目录，不要复用 Linux 的 CMake 缓存。
 
 ```powershell
 cmake -S .\examples\qt_skeleton_viewer -B .\build-qt65-win `
     -G "Visual Studio 17 2022" -A x64 `
-    "-DCMAKE_PREFIX_PATH=$SdkQt" `
-    -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
+    "-DCMAKE_PREFIX_PATH=$SdkQt"
 if ($LASTEXITCODE -ne 0) { throw "Qt 配置失败" }
 
 cmake --build .\build-qt65-win --config Release --parallel
@@ -349,7 +356,7 @@ if ($LASTEXITCODE -ne 0) { throw "Qt 编译失败" }
 .\build-qt65-win\Release\qt_skeleton_viewer.exe
 ```
 
-不带参数启动后，可以先选连接模式，再选串口并点击“连接”。**无线**选择接收器串口。**有线**分别选择左手和右手的数据串口，两项必须不同。若设备同时列出 CH342 A/B 两个接口，请按实际业务通道选择。请核对每手新帧及时间戳，以选定实际传输数据的通道。
+不带参数启动后，可以先选连接模式，再选串口并点击“连接手套”。**无线**选择接收器串口。**有线**分别选择左手和右手的数据串口，两项必须不同。若设备同时列出 CH342 A/B 两个接口，请按实际业务通道选择。请核对每手新帧及时间戳，以选定实际传输数据的通道。
 
 也可以指定串口并立即连接。
 
@@ -360,15 +367,35 @@ if ($LASTEXITCODE -ne 0) { throw "Qt 编译失败" }
 
 `--wired` 后按左手、右手的顺序传入实际端口。使用 `--no-profile` 从默认 M11 骨架开始，关闭档案读写，快速 R 和七步结果保留在当前会话。使用 `--profile "你的档案.hexprofile"` 可显式加载档案。省略档案参数时，无线按接收器串口自动匹配，有线按有序的左右串口组合匹配。
 
-Windows Qt 的七步流程先采集平放、伸直、握拳，再为食、中、无名、小指分别采集指腹捏与指尖掐。两姿态间可以松开。留意每手的端点采样提示。“重试当前对指”保留已采端点。步骤暂停后，“重新采集当前手指两姿态”重置当前指的两个端点，其他指保留。Qt 的“对指吸附”默认关闭，作用于双手实时显示，重新连接时保留本次选择。Linux Qt 使用单接收器、匹配档案和旧版连续运动七步。
+Windows Qt 的七步流程先采集平放、伸直、握拳，再为食、中、无名、小指分别采集指腹捏与指尖掐。两姿态间可以松开。留意每手的端点采样提示。“重试当前对指”保留已采端点。步骤暂停后，“重新采集当前手指两姿态”重置当前指的两个端点，其他指保留。Windows Qt 的对指吸附默认关闭。在完整示例窗口按住 `Ctrl` 和 `X`，再按一下 `F` 切换双手吸附。校准期间暂停切换。切换结果见“事件记录”，重新连接时沿用本次选择。Linux Qt 使用单接收器、匹配档案和旧版连续运动七步。
 
-构建脚本会复制 SDK DLL 及随包 VC 运行库到程序目录。从当前已设置 PATH 的终端可查找 Qt 库；若需要在文件管理器中直接启动，可用该 Qt 套件的部署工具补齐 Qt DLL 与平台插件：
+CMake 会复制 SDK、三维控件 DLL 和随包 VC 运行库。在本节 PowerShell 中可从已设置的路径加载 Qt。若要在文件管理器启动新构建的程序，参照 [Qt 三维视图接入说明](../接口文档/QT_FBX_INTEGRATION.zh-CN.md)复制 Qt DLL 与平台插件。
+
+### 4.10 Windows Qt FBX 最小接入示例
+
+`qt_fbx_embed` 演示如何在 Qt Widgets 应用中嵌入随 SDK 提供的三维手部控件。使用 **Qt 6.5.3 MSVC x64 Release** 和支持 OpenGL 3.3 的显卡驱动。控件自带左右手模型和待机姿态。从 SDK 根目录运行第 4.1 节的准备命令后，执行以下命令。
 
 ```powershell
-& "$SdkQt\bin\windeployqt.exe" --release .\build-qt65-win\Release\qt_skeleton_viewer.exe
+cmake -S .\examples\qt_fbx_embed -B .\build-qt-fbx `
+    -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$SdkQt"
+if ($LASTEXITCODE -ne 0) { throw "Qt FBX 配置失败" }
+
+cmake --build .\build-qt-fbx --config Release --target qt_fbx_embed
+if ($LASTEXITCODE -ne 0) { throw "Qt FBX 编译失败" }
+
+.\build-qt-fbx\Release\qt_fbx_embed.exe
 ```
 
-部署后仍需保留配套 SDK DLL，且实际设备驱动、运行时兼容性及完整功能应在目标 Windows 机器验证。
+无参数时显示双手待机模型。要接入实机，运行下面任一命令，并换成实际数据口。双有线参数依次为左手和右手。手套开始输出后，将手掌平放、手指自然伸直，在窗口内按 `R` 做两秒快速校准。
+
+```powershell
+.\build-qt-fbx\Release\qt_fbx_embed.exe COM3
+.\build-qt-fbx\Release\qt_fbx_embed.exe --wired COM12 COM14
+```
+
+CMake 会将 `HexQtFbxView.dll`、`HexaCercleGlove.dll` 及随包 VC 运行库复制到 EXE 目录。需要直接从文件管理器启动时，按三维控件接入与部署一节把同一 Qt 套件的运行库和平台插件放到 EXE 旁。
+
+[三维控件接入与部署](../接口文档/QT_FBX_INTEGRATION.zh-CN.md) · [最小示例源码](qt_fbx_embed/main.cpp)
 
 ## 5. 参数、输出与结果判断
 
@@ -376,13 +403,13 @@ Windows Qt 的七步流程先采集平放、伸直、握拳，再为食、中、
 
 | 参数 | 适用示例 | 含义 |
 | --- | --- | --- |
-| `--profile 文件` | 快速入门、统一快照、MuJoCo、Qt | 加载已有校准档案 |
+| `--profile 文件` | 快速入门、统一快照、MuJoCo、Qt 完整查看器 | 加载已有校准档案 |
 | `--lib 文件` | Python、MuJoCo | 指定原生 SDK 动态库 |
-| `--csv 文件` | 快速入门、统一快照、Qt | 导出角度 CSV |
-| `--jsonl 文件` | 快速入门、统一快照、Qt | 导出角度 JSON Lines |
+| `--csv 文件` | 快速入门、统一快照、Qt 完整查看器 | 导出角度 CSV |
+| `--jsonl 文件` | 快速入门、统一快照、Qt 完整查看器 | 导出角度 JSON Lines |
 | `--jsonl -` | 上述支持 JSON Lines 的示例 | 将逐帧 JSON 写到标准输出 |
-| `--no-profile` | Qt | 从 Unity 待机姿态启动，本次会话停用档案读写 |
-| `--wired 左串口 右串口` | Windows Qt | 使用独立的左右手有线端口并立即连接 |
+| `--no-profile` | Qt 完整查看器 | 从 Unity 待机姿态启动，本次会话停用档案读写 |
+| `--wired 左串口 右串口` | Windows Qt 上位机、Qt FBX 最小示例 | 使用独立的左右手有线端口并立即连接 |
 | `--r` | 控制台快速入门、统一快照、连接工作流、MuJoCo | 加载档案后仍执行普通 R |
 | `--hand left/right/both` | 连接工作流、MuJoCo | 选择 R 或显示的手 |
 | `--seconds N` | 连接工作流 | 运行约 N 秒 |
@@ -398,7 +425,7 @@ Windows Qt 的七步流程先采集平放、伸直、握拳，再为食、中、
 - 工作流 `phase=4`、`streaming=3` 表示双手数据流；`profile=1` 表示已加载档案。
 - CSV/JSON 应有左右手记录、时间戳、帧号和 15 个角度字段，单位为度。已有文件可能被同名运行覆盖。
 - MuJoCo 日志应出现 `online_mask=3`、`left:tracked right:tracked`；灰色模型不能作为实时跟踪证据。
-- Qt 未归零前不输出新角度；骨骼正常不代表角度零位已完成。
+- Qt 完整查看器 未归零前不输出新角度；骨骼正常不代表角度零位已完成。
 - 界面显示的观测帧率、双手到达间隔不等于硬件采样率、端到端延迟或硬件同步证明。
 
 ### 5.3 常见问题

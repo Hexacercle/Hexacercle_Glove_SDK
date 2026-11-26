@@ -62,9 +62,9 @@ python3 examples/python_quickstart/main.py /dev/ttyUSB0 --lib ./接口文档/lib
 
 两个平台都可加 `--profile 文件路径` 加载已有校准文件；需要普通 R 时再加 `--r`，需要导出时加 `--csv angles.csv --jsonl angles.jsonl`。`--jsonl -` 可用管道实时消费 JSON；状态文字写到标准错误，避免混入数据流。按 Ctrl+C 断开。示例打印连接状态、电量、信道、骨骼和逐关节角。`ctypes.Structure` 使用头文件的默认对齐，不能添加 `_pack_=1`；本版的 Hub 配置与状态结构大小已和 C++ ABI 核对。升级 SDK 结构时要同步这些定义。
 
-## Qt 骨骼线框查看器
+## Qt 完整上位机示例
 
-源码：[qt_skeleton_viewer/main.cpp](qt_skeleton_viewer/main.cpp)，独立 [CMakeLists.txt](qt_skeleton_viewer/CMakeLists.txt)。需要 Qt Widgets（Qt 5 或 Qt 6），构建时引用本包预编译 SDK：
+源码：[qt_skeleton_viewer/main.cpp](qt_skeleton_viewer/main.cpp)，独立 [CMakeLists.txt](qt_skeleton_viewer/CMakeLists.txt)。Windows 使用 Qt 6.5.3 MSVC x64 Release，并排显示 SDK 骨骼线框和 Unity FBX 三维模型。随包运行版可直接启动。Linux 线框示例使用 Qt Widgets（Qt 5 或 Qt 6）。[Windows 运行版](qt_skeleton_viewer/bin/qt_skeleton_viewer.exe)
 
 Qt 窗口展示接收器阶段、最新操作状态和失败码、串口失败阶段／系统码、双手在线／新帧位、主机侧频率与双手到达差。按钮可断开／重连、暂停／恢复数据流、单手或双手快速 R（2 秒）、启动／取消／重试 Unity 七步标定及重采当前对指、保存／加载按串口绑定的 profile。四个既有 Unity UDP JSON 通道在收到新帧时仅预览编码结果；示例不会自动发送网络报文。需要真正广播时由接入方把编码缓冲发往目标 UDP 地址。无 Qt SDK 的环境无法本机编译图形窗口，应在已安装 Qt Widgets 的目标环境执行下列命令。
 
@@ -80,21 +80,38 @@ cmake --build build-qt-demo --target qt_skeleton_viewer
 ./build-qt-demo/qt_skeleton_viewer /dev/ttyUSB0 --no-profile
 ```
 
-Windows：
+Windows 使用 Qt 6.5.3 MSVC x64 Release。
 
 ```bat
 cmake -S examples/qt_skeleton_viewer -B build-qt-msvc -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH=C:\Qt\6.5.3\msvc2019_64
 cmake --build build-qt-msvc --config Release --target qt_skeleton_viewer
-C:\Qt\6.5.3\msvc2019_64\bin\windeployqt.exe --release build-qt-msvc\Release\qt_skeleton_viewer.exe
+set "PATH=C:\Qt\6.5.3\msvc2019_64\bin;%PATH%"
+set "QT_QPA_PLATFORM_PLUGIN_PATH=C:\Qt\6.5.3\msvc2019_64\plugins\platforms"
 build-qt-msvc\Release\qt_skeleton_viewer.exe COM3 --no-profile
 build-qt-msvc\Release\qt_skeleton_viewer.exe --wired COM12 COM14 --no-profile
 ```
 
 双有线示例中的 COM12、COM14 依次代表左、右数据口，按实际设备替换。不带串口参数时可在界面选择后连接。`--no-profile` 停用本次档案读写，Windows 的两秒快速 R 和七步结果仍可在会话内使用。`--profile 文件路径` 显式加载档案。省略档案参数时，无线按接收器串口匹配，有线按有序的左右串口组合匹配。
 
-双手平放、手指自然伸直，点击 **R 快速校准（2 秒）**。R 完成后点击 **角度归零（手指伸直）** 查看屈伸角。可加 `--csv angles.csv` 与 `--jsonl angles.jsonl` 导出结果。画布使用 SDK 输出的世界坐标和当前模型的父节点连接绘制二维线框。
+双手平放、手指自然伸直，点击 **R 快速校准（2 秒）**。R 完成后点击 **角度归零（手指伸直）** 查看屈伸角。可加 `--csv angles.csv` 与 `--jsonl angles.jsonl` 导出结果。线框画布使用 SDK 的世界坐标和当前模型的父节点连接。Windows 的三维画布将同一 SDK 姿态提交给 `HexQtFbxView` 控件。
 
-Windows Qt 默认关闭“对指吸附”。打开后会在支持的档案上应用指尖接触辅助，关闭后沿用逐指校准结果。此控件作用于双手，切换连接时保留当前选择，校准文件不存储该开关。
+Windows Qt 默认关闭对指吸附。在完整示例窗口按住 `Ctrl` 和 `X`，再按一下 `F` 切换双手吸附。校准期间暂停切换。切换结果见“事件记录”。开启后会在支持的档案上应用指尖接触辅助，关闭后沿用逐指校准结果。切换连接时保留当前选择，校准文件不存储该开关。
+
+## Windows Qt FBX 最小接入示例
+
+`qt_fbx_embed` 使用 Windows SDK 提供的预编译 Qt 控件驱动双手模型。使用 **Qt 6.5.3 MSVC x64 Release**，并把示例中的 Qt 安装目录改成实际路径。首次无参数启动即可查看待机姿态。
+
+```powershell
+$SdkQt = "C:\Qt\6.5.3\msvc2019_64"
+$env:PATH = "$SdkQt\bin;$env:PATH"
+cmake -S examples/qt_fbx_embed -B build-qt-fbx -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$SdkQt"
+cmake --build build-qt-fbx --config Release --target qt_fbx_embed
+.\build-qt-fbx\Release\qt_fbx_embed.exe
+```
+
+无线接收器可用 `qt_fbx_embed.exe COM3`，有线模式可用 `qt_fbx_embed.exe --wired COM12 COM14`，双有线参数顺序为左、右。换用设备管理器中的实际数据口。收到数据后，保持平掌、手指自然伸直，在窗口内按 `R`，完成两秒校准后可看到跟踪模型。
+
+示例只通过 `hex_partner_tick` 推进 SDK，并从 `hex_external_get_frame` 读取同轮结果。按手检查 `fresh_hand_mask`、`tracked_hand_mask` 和 `pose[hand].tracked_mask` 后再向控件提交姿态。组件调用、Qt 依赖部署和自有应用接入见 [Qt FBX 接入说明](../接口文档/QT_FBX_INTEGRATION.zh-CN.md) 和 [最小示例源码](qt_fbx_embed/main.cpp)。
 
 ## 逐关节角与实时输出
 
@@ -124,7 +141,7 @@ thumb_cmc,thumb_mcp,thumb_ip,index_mcp,index_pip,index_dip,middle_mcp,middle_pip
 
 内部 SDK 另有重戴 R 和原 UI 七步校准入口，当前外部接入示例仍只使用约定的普通 R 与骨骼接口。
 
-`HexMocapDisplayPose` 的世界坐标与旋转适合绘图/定位；向 Unity/Qt 模型设置 `localRotation` 时，应使用局部旋转字段或按父骨骼世界旋转换算。演示模型是合成几何，外观和真实 FBX 绑定效果不会一致。详细契约见 [对外 API 说明](../接口文档/EXTERNAL_API.zh-CN.md)。
+`HexMocapDisplayPose` 的世界坐标与旋转适合绘图/定位；向 Unity/Qt 模型设置 `localRotation` 时，应使用局部旋转字段或按父骨骼世界旋转换算。控制台示例可使用合成骨架验证数据流。使用 Windows 的 FBX 控件可查看与配套 Unity 手骨架绑定的三维模型。详细契约见 [对外 API 说明](../接口文档/EXTERNAL_API.zh-CN.md)。
 
 
 
