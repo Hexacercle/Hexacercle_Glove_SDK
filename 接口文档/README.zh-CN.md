@@ -11,7 +11,8 @@
 | 首次运行 SDK | [接入与调用指南](EXTERNAL_INTEGRATION.zh-CN.md) | 环境准备、句柄创建、连接、读帧、校准、断开的顺序。 |
 | 查函数签名和参数 | [函数参数手册](EXTERNAL_API_PARAMETERS.zh-CN.md) | 输入、输出、返回值、有效性条件、关键调用示例与错误处理。 |
 | 做上位机自动搜索与重连 | [工作流接口指南](PARTNER_INTEGRATION.zh-CN.md) | `hex_partner_*` 状态机、事件、标定和档案管理。 |
-| 用 Qt 显示 `kulou_shou_New1.fbx` | [11.20 Qt 三维骨架说明](11.20说明文档.md) | 21 节点线框、档案、快速 R、骨架缩放与 FBX 网格验收。 |
+| 嵌入配套的 Unity 三维手部模型 | [Qt 三维手部视图接入](QT_FBX_INTEGRATION.zh-CN.md) | Windows 的 `HexQtFbxView` 组件、`kulou_shou_New1.fbx` 配套网格及最小示例。 |
+| 接入自有 FBX 骨架 | [11.20 Qt 三维骨架说明](11.20说明文档.md) | SDK 的 21 节点、坐标和骨长对照、绑定及网格验收。 |
 | 核对交付条件 | [库与头文件](library/README.zh-CN.md) | 随包库文件、头文件与构建环境。 |
 | 直接看代码 | [Python／C++／Qt 示例](../examples/SDK_USAGE_PYTHON_CPP_QT.zh-CN.md) | 可运行的串口、骨骼、角度和设备 ID 读取示例。 |
 
@@ -44,11 +45,12 @@
 ├─ EXTERNAL_API_PARAMETERS.zh-CN.md 函数参数与关键接口示例
 ├─ EXTERNAL_INTEGRATION.zh-CN.md   接入顺序
 ├─ PARTNER_INTEGRATION.zh-CN.md    无线搜索、双有线与重连工作流
-├─ 11.20说明文档.md  Qt 三维 FBX 骨架接入
+├─ QT_FBX_INTEGRATION.zh-CN.md     配套三维手部视图与最小示例
+├─ 11.20说明文档.md               SDK 骨骼与自有 FBX 骨架接入
 └─ library/
    ├─ include/hex_glove/          对外头文件
-   ├─ windows-x64-MSVC/           MSVC DLL、导入库和依赖（保留原目录名）
-   ├─ windows-x64/                上述文件的相同副本，兼容原示例 CMake
+   ├─ windows-x64-MSVC/           原生 SDK、导入库和运行依赖
+   ├─ windows-x64/                原生 SDK、运行依赖与 Qt 三维视图组件
    └─ linux-x64/                  SO
 ```
 
